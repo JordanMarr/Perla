@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="Argu" Version="6.1.1" />
+    <PackageReference Include="FSharp.SystemCommandLine" Version="0.13.0-beta4" />
   </ItemGroup>
 
   <ItemGroup>

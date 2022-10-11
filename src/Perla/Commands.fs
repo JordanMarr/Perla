@@ -12,10 +12,8 @@ open Server
 open Build
 open Logger
 open Spectre.Console
-
+open FSharp.SystemCommandLine
 open Argu
-
-
 
 type ServerArgs =
   | [<AltCommandLine("-a")>] Auto_Start of bool option
@@ -766,6 +764,19 @@ module Commands =
       do! Fs.createPerlaConfig (Path.GetPerlaConfigPath()) opts
 
       return 0
+    }
+
+
+  let runRemoveCmd =
+    let package = Input.ArgumentMaybe<string>("package", "A package")
+
+    let toRecord (package: string option) =
+      { package = package }
+
+    command "remove" {
+      description "Removes stuff"
+      inputs package
+      setHandler (toRecord >> runRemove)
     }
 
   let runNew (opts: ProjectOptions) =
