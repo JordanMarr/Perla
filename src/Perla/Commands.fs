@@ -209,6 +209,7 @@ type DevServerArgs =
       | Version _ -> "Prints out the cli version to the console."
 
 module Commands =
+
   let private (|ParseRegex|_|) regex str =
     let m = Text.RegularExpressions.Regex(regex).Match(str)
 
@@ -216,6 +217,20 @@ module Commands =
       Some(List.tail [ for x in m.Groups -> x.Value ])
     else
       None
+  
+  let processExit (result: Task<Result<int, exn>>) =
+    task {
+      match! result with
+      | Ok exitCode -> return exitCode
+      | Error ex ->
+        match ex with
+        | :? ArguParseException as ex -> eprintfn $"{ex.Message}"
+        | CommandNotParsedException message -> eprintfn $"{message}"
+        | others ->
+          Logger.log ($"There was an error running this command", others)
+
+        return 1
+    }
 
   let parseUrl url =
     match url with
@@ -776,7 +791,7 @@ module Commands =
     command "remove" {
       description "Removes stuff"
       inputs package
-      setHandler (toRecord >> runRemove)
+      setHandler (toRecord >> runRemove >> processExit)
     }
 
   let runNew (opts: ProjectOptions) =
