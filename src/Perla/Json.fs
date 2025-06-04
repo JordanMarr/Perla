@@ -22,7 +22,7 @@ type PerlaConfigSection =
   | Dependencies of dependencies: Dependency seq option
   | DevDependencies of devDependencies: Dependency seq option
 
-let DefaultJsonOptions () =
+let DefaultJsonOptions() =
   JsonSerializerOptions(
     WriteIndented = true,
     AllowTrailingCommas = true,
@@ -31,10 +31,10 @@ let DefaultJsonOptions () =
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
   )
 
-let DefaultJsonNodeOptions () =
+let DefaultJsonNodeOptions() =
   JsonNodeOptions(PropertyNameCaseInsensitive = true)
 
-let DefaultJsonDocumentOptions () =
+let DefaultJsonDocumentOptions() =
   JsonDocumentOptions(
     AllowTrailingCommas = true,
     CommentHandling = JsonCommentHandling.Skip
@@ -60,7 +60,7 @@ module TemplateDecoders =
   }
 
   let TemplateConfigItemDecoder: Decoder<DecodedTemplateConfigItem> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       id = get.Required.Field "id" Decode.string
       name = get.Required.Field "name" Decode.string
       path = get.Required.Field "path" Decode.string |> UMX.tag<SystemPath>
@@ -69,7 +69,7 @@ module TemplateDecoders =
     })
 
   let TemplateConfigurationDecoder: Decoder<DecodedTemplateConfiguration> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       name = get.Required.Field "name" Decode.string
       group = get.Required.Field "group" Decode.string
       templates =
@@ -146,7 +146,7 @@ module ConfigDecoders =
   }
 
   let FableFileDecoder: Decoder<DecodedFableConfig> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       project =
         get.Optional.Field "project" Decode.string
         |> Option.map UMX.tag<SystemPath>
@@ -160,7 +160,7 @@ module ConfigDecoders =
     })
 
   let DevServerDecoder: Decoder<DecodedDevServer> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       port = get.Optional.Field "port" Decode.int
       host = get.Optional.Field "host" Decode.string
       liveReload = get.Optional.Field "liveReload" Decode.bool
@@ -169,7 +169,7 @@ module ConfigDecoders =
     })
 
   let EsbuildDecoder: Decoder<DecodedEsbuild> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       fileLoaders =
         get.Optional.Field "fileLoaders" (Decode.dict Decode.string)
       esBuildPath =
@@ -191,7 +191,7 @@ module ConfigDecoders =
     })
 
   let BuildDecoder: Decoder<DecodedBuild> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       includes =
         get.Optional.Field "includes" (Decode.list Decode.string)
         |> Option.map List.toSeq
@@ -205,7 +205,7 @@ module ConfigDecoders =
     })
 
   let DependencyDecoder: Decoder<Dependency> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       name = get.Required.Field "name" Decode.string
       version = get.Optional.Field "version" Decode.string
       alias = get.Optional.Field "alias" Decode.string
@@ -213,15 +213,15 @@ module ConfigDecoders =
 
   let BrowserDecoder: Decoder<Browser> =
     Decode.string
-    |> Decode.andThen (fun value -> Browser.FromString value |> Decode.succeed)
+    |> Decode.andThen(fun value -> Browser.FromString value |> Decode.succeed)
 
   let BrowserModeDecoder: Decoder<BrowserMode> =
     Decode.string
-    |> Decode.andThen (fun value ->
+    |> Decode.andThen(fun value ->
       BrowserMode.FromString value |> Decode.succeed)
 
   let TestConfigDecoder: Decoder<DecodedTesting> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       browsers =
         get.Optional.Field "browsers" (Decode.list BrowserDecoder)
         |> Option.map List.toSeq
@@ -238,7 +238,7 @@ module ConfigDecoders =
     })
 
   let PerlaDecoder: Decoder<DecodedPerlaConfig> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       let runConfigDecoder =
         Decode.string
         |> Decode.andThen (function
@@ -260,18 +260,18 @@ module ConfigDecoders =
 
       let directoriesDecoder =
         get.Optional.Field "mountDirectories" (Decode.dict Decode.string)
-        |> Option.map (fun m ->
+        |> Option.map(fun m ->
           m
           |> Map.toSeq
-          |> Seq.map (fun (k, v) -> UMX.tag<ServerUrl> k, UMX.tag<UserPath> v)
+          |> Seq.map(fun (k, v) -> UMX.tag<ServerUrl> k, UMX.tag<UserPath> v)
           |> Map.ofSeq)
 
       let pathsDecoder =
         get.Optional.Field "paths" (Decode.dict Decode.string)
-        |> Option.map (fun m ->
+        |> Option.map(fun m ->
           m
           |> Map.toSeq
-          |> Seq.map (fun (k, v) ->
+          |> Seq.map(fun (k, v) ->
             UMX.tag<BareImport> k, UMX.tag<ResolutionUrl> v)
           |> Map.ofSeq)
 
@@ -306,7 +306,7 @@ module ConfigDecoders =
 module internal TestDecoders =
 
   let TestStats: Decoder<TestStats> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       suites = get.Required.Field "suites" Decode.int
       tests = get.Required.Field "tests" Decode.int
       passes = get.Required.Field "passes" Decode.int
@@ -317,7 +317,7 @@ module internal TestDecoders =
     })
 
   let Test: Decoder<Test> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       body = get.Required.Field "body" Decode.string
       duration = get.Optional.Field "duration" Decode.float
       fullTitle = get.Required.Field "fullTitle" Decode.string
@@ -330,7 +330,7 @@ module internal TestDecoders =
     })
 
   let Suite: Decoder<Suite> =
-    Decode.object (fun get -> {
+    Decode.object(fun get -> {
       id = get.Required.Field "id" Decode.string
       title = get.Required.Field "title" Decode.string
       fullTitle = get.Required.Field "fullTitle" Decode.string
@@ -344,30 +344,30 @@ module internal TestDecoders =
 module internal EventDecoders =
 
   let SessionStart: Decoder<Guid * TestStats * int> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       get.Required.Field "runId" Decode.guid,
       get.Required.Field "stats" TestDecoders.TestStats,
       get.Required.Field "totalTests" Decode.int)
 
   let SessionEnd: Decoder<Guid * TestStats> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       get.Required.Field "runId" Decode.guid,
       get.Required.Field "stats" TestDecoders.TestStats)
 
   let SuiteEvent: Decoder<Guid * TestStats * Suite> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       get.Required.Field "runId" Decode.guid,
       get.Required.Field "stats" TestDecoders.TestStats,
       get.Required.Field "suite" TestDecoders.Suite)
 
   let TestPass: Decoder<Guid * TestStats * Test> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       get.Required.Field "runId" Decode.guid,
       get.Required.Field "stats" TestDecoders.TestStats,
       get.Required.Field "test" TestDecoders.Test)
 
   let TestFailed: Decoder<Guid * TestStats * Test * string * string> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       get.Required.Field "runId" Decode.guid,
       get.Required.Field "stats" TestDecoders.TestStats,
       get.Required.Field "test" TestDecoders.Test,
@@ -375,7 +375,7 @@ module internal EventDecoders =
       get.Required.Field "stack" Decode.string)
 
   let ImportFailed: Decoder<Guid * string * string> =
-    Decode.object (fun get ->
+    Decode.object(fun get ->
       get.Required.Field "runId" Decode.guid,
       get.Required.Field "message" Decode.string,
       get.Required.Field "stack" Decode.string)
@@ -456,7 +456,7 @@ type Json =
           |> Result.map TestImportFailed
       | "__perla-test-run-finished" ->
         let decoder =
-          Decode.object (fun get -> get.Required.Field "runId" Decode.guid)
+          Decode.object(fun get -> get.Required.Field "runId" Decode.guid)
 
         return! Decode.fromString decoder value |> Result.map TestRunFinished
       | unknown -> return! Error($"'{unknown}' is not a known event")

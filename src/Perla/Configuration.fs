@@ -128,7 +128,7 @@ module Defaults =
 module internal Json =
   open Perla.Json
 
-  let getConfigDocument (perlaJsonText: string) : JsonObject =
+  let getConfigDocument(perlaJsonText: string) : JsonObject =
     JsonObject
       .Parse(
         perlaJsonText,
@@ -143,44 +143,44 @@ module internal Json =
     : unit =
     let configuration =
       fields
-      |> Seq.tryPick (fun f ->
+      |> Seq.tryPick(fun f ->
         match f with
         | PerlaWritableField.Configuration config -> Some config
         | _ -> None)
-      |> Option.map (fun f -> f.AsString)
+      |> Option.map(fun f -> f.AsString)
 
     let provider =
       fields
-      |> Seq.tryPick (fun f ->
+      |> Seq.tryPick(fun f ->
         match f with
         | PerlaWritableField.Provider config -> Some config
         | _ -> None)
-      |> Option.map (fun f -> f.AsString)
+      |> Option.map(fun f -> f.AsString)
 
     let dependencies =
       fields
-      |> Seq.tryPick (fun f ->
+      |> Seq.tryPick(fun f ->
         match f with
         | PerlaWritableField.Dependencies deps -> Some deps
         | _ -> None)
 
     let devDependencies =
       fields
-      |> Seq.tryPick (fun f ->
+      |> Seq.tryPick(fun f ->
         match f with
         | PerlaWritableField.DevDependencies deps -> Some deps
         | _ -> None)
 
     let paths =
       fields
-      |> Seq.tryPick (fun f ->
+      |> Seq.tryPick(fun f ->
         match f with
         | PerlaWritableField.Paths paths -> Some paths
         | _ -> None)
 
     let fable =
       fields
-      |> Seq.tryPick (fun f ->
+      |> Seq.tryPick(fun f ->
         match f with
         | PerlaWritableField.Fable fields ->
           let mutable f = {|
@@ -206,42 +206,42 @@ module internal Json =
           Some f
         | _ -> None)
 
-    let addConfig (content: JsonObject) =
+    let addConfig(content: JsonObject) =
       match configuration with
       | Some config -> content["runConfiguration"] <- Json.ToNode(config)
       | None -> ()
 
       content
 
-    let addProvider (content: JsonObject) =
+    let addProvider(content: JsonObject) =
       match provider with
       | Some config -> content["provider"] <- Json.ToNode(config)
       | None -> ()
 
       content
 
-    let addDeps (content: JsonObject) =
+    let addDeps(content: JsonObject) =
       match dependencies with
       | Some deps -> content["dependencies"] <- Json.ToNode(deps)
       | None -> ()
 
       content
 
-    let addDevDeps (content: JsonObject) =
+    let addDevDeps(content: JsonObject) =
       match devDependencies with
       | Some deps -> content["devDependencies"] <- Json.ToNode(deps)
       | None -> ()
 
       content
 
-    let addFable (content: JsonObject) =
+    let addFable(content: JsonObject) =
       match fable with
       | Some fable -> content["fable"] <- Json.ToNode(fable)
       | None -> ()
 
       content
 
-    let addPaths (content: JsonObject) =
+    let addPaths(content: JsonObject) =
       match paths with
       | Some paths -> content["paths"] <- Json.ToNode(paths)
       | None -> ()
@@ -259,7 +259,7 @@ module internal Json =
     match
       content["$schema"]
       |> Option.ofObj
-      |> Option.map (fun schema -> schema.GetValue<string>() |> Option.ofObj)
+      |> Option.map(fun schema -> schema.GetValue<string>() |> Option.ofObj)
       |> Option.flatten
     with
     | Some _ -> ()
@@ -281,32 +281,24 @@ module internal ConfigExtraction =
   module FromDecoders =
     open Json.ConfigDecoders
 
-    let GetFable
-      (
-        config: FableConfig option,
-        fable: DecodedFableConfig option
-      ) =
-      option {
-        let! decoded = fable
-        let fable = defaultArg config Defaults.FableConfig
+    let GetFable(config: FableConfig option, fable: DecodedFableConfig option) = option {
+      let! decoded = fable
+      let fable = defaultArg config Defaults.FableConfig
 
-        let outDir =
-          decoded.outDir |> Option.orElseWith (fun () -> fable.outDir)
+      let outDir = decoded.outDir |> Option.orElseWith(fun () -> fable.outDir)
 
-        return {
-          fable with
-              project = defaultArg decoded.project fable.project
-              extension = defaultArg decoded.extension fable.extension
-              sourceMaps = defaultArg decoded.sourceMaps fable.sourceMaps
-              outDir = outDir
-        }
+      return {
+        fable with
+            project = defaultArg decoded.project fable.project
+            extension = defaultArg decoded.extension fable.extension
+            sourceMaps = defaultArg decoded.sourceMaps fable.sourceMaps
+            outDir = outDir
       }
+    }
 
     let GetDevServer
-      (
-        config: DevServerConfig,
-        devServer: DecodedDevServer option
-      ) =
+      (config: DevServerConfig, devServer: DecodedDevServer option)
+      =
       option {
         let! decoded = devServer
 
@@ -320,7 +312,7 @@ module internal ConfigExtraction =
         }
       }
 
-    let GetBuild (config: BuildConfig, build: DecodedBuild option) = option {
+    let GetBuild(config: BuildConfig, build: DecodedBuild option) = option {
       let! decoded = build
 
       return {
@@ -332,7 +324,7 @@ module internal ConfigExtraction =
       }
     }
 
-    let GetEsbuild (config: EsbuildConfig, esbuild: DecodedEsbuild option) = option {
+    let GetEsbuild(config: EsbuildConfig, esbuild: DecodedEsbuild option) = option {
       let! decoded = esbuild
 
       return {
@@ -349,7 +341,7 @@ module internal ConfigExtraction =
       }
     }
 
-    let GetTesting (config: TestConfig, testing: DecodedTesting option) = option {
+    let GetTesting(config: TestConfig, testing: DecodedTesting option) = option {
       let! testing = testing
 
       return {
@@ -364,7 +356,7 @@ module internal ConfigExtraction =
       }
     }
 
-    let GetPlugins (plugins: string list option) = option {
+    let GetPlugins(plugins: string list option) = option {
       let! plugins = plugins
 
       if plugins.Length = 0 then
@@ -376,11 +368,9 @@ module internal ConfigExtraction =
   [<RequireQualifiedAccess>]
   module FromFields =
     let GetServerFields
-      (
-        config: DevServerConfig,
-        serverOptions: DevServerField seq option
-      ) =
-      let getDefaults () = seq {
+      (config: DevServerConfig, serverOptions: DevServerField seq option)
+      =
+      let getDefaults() = seq {
         DevServerField.Port config.port
         DevServerField.Host config.host
         DevServerField.LiveReload config.liveReload
@@ -389,28 +379,22 @@ module internal ConfigExtraction =
 
       let options = serverOptions |> Option.defaultWith getDefaults
 
-      if Seq.isEmpty options then getDefaults () else options
+      if Seq.isEmpty options then getDefaults() else options
 
-    let GetMinify
-      (
-        config: RunConfiguration,
-        serverOptions: DevServerField seq
-      ) =
+    let GetMinify(config: RunConfiguration, serverOptions: DevServerField seq) =
       serverOptions
-      |> Seq.tryPick (fun opt ->
+      |> Seq.tryPick(fun opt ->
         match opt with
         | MinifySources minify -> Some minify
         | _ -> None)
-      |> Option.defaultWith (fun _ ->
+      |> Option.defaultWith(fun _ ->
         match config with
         | RunConfiguration.Production -> true
         | RunConfiguration.Development -> false)
 
     let GetDevServerOptions
-      (
-        config: DevServerConfig,
-        serverOptions: DevServerField seq
-      ) =
+      (config: DevServerConfig, serverOptions: DevServerField seq)
+      =
       serverOptions
       |> Seq.fold
         (fun current next ->
@@ -423,10 +407,8 @@ module internal ConfigExtraction =
         config
 
     let GetTesting
-      (
-        testing: TestConfig,
-        testingOptions: TestingField seq option
-      ) =
+      (testing: TestConfig, testingOptions: TestingField seq option)
+      =
       defaultArg testingOptions Seq.empty
       |> Seq.fold
         (fun current next ->
@@ -436,15 +418,13 @@ module internal ConfigExtraction =
           | TestingField.Excludes value -> { current with excludes = value }
           | TestingField.Watch value -> { current with watch = value }
           | TestingField.Headless value -> { current with headless = value }
-          | TestingField.BrowserMode value -> {
-              current with
-                  browserMode = value
-            })
+          | TestingField.BrowserMode value ->
+              { current with browserMode = value })
         testing
 
 
   // will enable in the future
-  let FromEnv (config: PerlaConfig) : PerlaConfig = config
+  let FromEnv(config: PerlaConfig) : PerlaConfig = config
 
   let FromCli
     (runConfig: RunConfiguration option)
@@ -489,7 +469,7 @@ module internal ConfigExtraction =
       let! userConfig = option {
         let! fileContent =
           fileContent
-          |> Option.map (fun fileContent ->
+          |> Option.map(fun fileContent ->
             fileContent.ToJsonString() |> Json.Json.FromConfigFile)
 
         match fileContent with
@@ -553,8 +533,8 @@ type ConfigurationManager
     writePerlaJsonText: JsonObject option -> unit
   ) =
 
-  let _getPerlaText () =
-    match readPerlaJsonText () with
+  let _getPerlaText() =
+    match readPerlaJsonText() with
     | Some text -> text |> Json.getConfigDocument |> Some
     | None -> None
 
@@ -564,7 +544,7 @@ type ConfigurationManager
 
   let mutable _testingOptions = None
 
-  let mutable _fileConfig = _getPerlaText ()
+  let mutable _fileConfig = _getPerlaText()
 
   let mutable _configContents =
     Defaults.PerlaConfig
@@ -577,7 +557,7 @@ type ConfigurationManager
       _testingOptions
 
 
-  let runPipeline () =
+  let runPipeline() =
     _configContents <-
       Defaults.PerlaConfig
       |> ConfigExtraction.FromEnv
@@ -602,16 +582,16 @@ type ConfigurationManager
     _provider <- provider
     _testingOptions <- testingOptions
 
-    runPipeline ()
+    runPipeline()
 
   member _.UpdateFromFile() =
-    _fileConfig <- _getPerlaText ()
-    runPipeline ()
+    _fileConfig <- _getPerlaText()
+    runPipeline()
 
   member _.WriteFieldsToFile(newValues: PerlaWritableField seq) =
     Json.updateFileFields &_fileConfig newValues
     writePerlaJsonText _fileConfig
-    runPipeline ()
+    runPipeline()
 
 
 let ConfigurationManager =

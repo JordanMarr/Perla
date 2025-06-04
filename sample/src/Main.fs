@@ -11,6 +11,6 @@ importSideEffects "./lit.js"
 importSideEffects "./styles.css?js"
 importSideEffects "../assets/fonts/fira_code.css?js"
 
-registerAll ()
+registerAll()
 // Start the app
-Program.mount ("fable-app", App.view ()) |> ignore
+Program.mount("fable-app", App.view()) |> ignore

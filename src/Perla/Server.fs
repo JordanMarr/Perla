@@ -99,7 +99,7 @@ module Extensions =
       let t = typeof<'T>
 
       match ctx.RequestServices.GetService t with
-      | null -> raise (exn t.Name)
+      | null -> raise(exn t.Name)
       | service -> service :?> 'T
 
     /// <summary>
@@ -191,7 +191,7 @@ module Extensions =
 
 module LiveReload =
 
-  let WriteReloadChange (event: FileChangedEvent, response: HttpResponse) =
+  let WriteReloadChange(event: FileChangedEvent, response: HttpResponse) =
     let data =
       Json.ToText(
         {|
@@ -201,19 +201,16 @@ module LiveReload =
         false
       )
 
-    Logger.log ($"LiveReload: File Changed: {event.name}", target = Serve)
+    Logger.log($"LiveReload: File Changed: {event.name}", target = Serve)
     response.WriteAsync $"event:reload\ndata:{data}\n\n"
 
   let WriteHmrChange
-    (
-      event: FileChangedEvent,
-      transform: FileTransform,
-      response: HttpResponse
-    ) =
+    (event: FileChangedEvent, transform: FileTransform, response: HttpResponse)
+    =
 
     let oldPath =
       event.oldPath
-      |> Option.map (fun oldPath ->
+      |> Option.map(fun oldPath ->
         $"{oldPath}".Replace(Path.DirectorySeparatorChar, '/'))
 
     let replaced =
@@ -236,12 +233,12 @@ module LiveReload =
         |}
       )
 
-    Logger.log ($"HMR: CSS File Changed: {userPath}", target = Serve)
+    Logger.log($"HMR: CSS File Changed: {userPath}", target = Serve)
     response.WriteAsync $"event:replace-css\ndata:{data}\n\n"
 
-  let WriteCompileError (error: string option, response: HttpResponse) =
+  let WriteCompileError(error: string option, response: HttpResponse) =
     let err = Json.ToText({| error = error |}, true)
-    Logger.log ($"Compilation Error: {err.Substring(0, 80)}...", target = Serve)
+    Logger.log($"Compilation Error: {err.Substring(0, 80)}...", target = Serve)
     response.WriteAsync(ReloadEvents.CompileError(err).AsString)
 
 [<RequireQualifiedAccess>]
@@ -260,7 +257,7 @@ module Middleware =
       requestedAs: RequestedAs,
       content: byte array
     ) : Task =
-    let processCssAsJs (content, url: string) =
+    let processCssAsJs(content, url: string) =
       $"""const style=document.createElement('style');style.setAttribute("url", "{url}");
 document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
@@ -268,23 +265,23 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
     match mimeType, requestedAs with
     | "application/json", JS ->
-      setContentAndWrite (
+      setContentAndWrite(
         MimeTypeNames.DefaultJavaScript,
-        (processJsonAsJs (Encoding.UTF8.GetString(content))
+        (processJsonAsJs(Encoding.UTF8.GetString(content))
          |> Encoding.UTF8.GetBytes)
       )
     | "text/css", JS ->
-      setContentAndWrite (
+      setContentAndWrite(
         MimeTypeNames.DefaultJavaScript,
-        (processCssAsJs (Encoding.UTF8.GetString(content), reqPath)
+        (processCssAsJs(Encoding.UTF8.GetString(content), reqPath)
          |> Encoding.UTF8.GetBytes)
       )
-    | mimeType, Normal -> setContentAndWrite (mimeType, content)
+    | mimeType, Normal -> setContentAndWrite(mimeType, content)
     | mimeType, JS ->
       Logger.log
         $"Requested %A{JS} - {mimeType} - {reqPath} as JS, this file type is not supported as JS, sending default content"
 
-      setContentAndWrite (mimeType, content)
+      setContentAndWrite(mimeType, content)
 
   let ResolveFile: HttpContext -> RequestDelegate -> Task =
     fun ctx next ->
@@ -298,7 +295,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
           match fileExtProvider.TryGetContentType(ctx.Request.Path) with
           | true, mime ->
-            let setContentTypeAndWrite (mimeType, content) =
+            let setContentTypeAndWrite(mimeType, content) =
               ctx.SetContentType mimeType
               ctx.WriteBytesAsync content
 
@@ -308,7 +305,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
               if query.ContainsKey("js") then JS else Normal
 
             return!
-              processFile (
+              processFile(
                 setContentTypeAndWrite,
                 ctx.Request.Path,
                 mime,
@@ -326,7 +323,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
       let! toDecode = content.ReadToEndAsync()
 
       Json.TestEventFromJson toDecode
-      |> Result.teeError (fun err ->
+      |> Result.teeError(fun err ->
         Logger.log $"[bold red]{err.EscapeMarkup()}[/]")
       |> Result.iter testEvents.OnNext
 
@@ -336,7 +333,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
   let SendScript (script: PerlaScript) (_: HttpContext) = task {
 
-    Logger.log ($"Sending Script %A{script}", target = PrefixKind.Serve)
+    Logger.log($"Sending Script %A{script}", target = PrefixKind.Serve)
 
     match script with
     | PerlaScript.LiveReload ->
@@ -358,7 +355,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
             "text/javascript"
           )
       | None ->
-        Logger.log (
+        Logger.log(
           "An env file was requested but no env variables were found",
           target = PrefixKind.Serve
         )
@@ -367,7 +364,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
           """If you want to use env variables, remember to prefix them with 'PERLA_' e.g.
 'PERLA_myApiKey' or 'PERLA_CLIENT_SECRET', then you will be able to import them via the env file"""
 
-        Logger.logCustom (
+        Logger.logCustom(
           $"[bold red]Env Content not found[/][bold yellow]{message}[/]",
           escape = false
         )
@@ -393,7 +390,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
       let onChangeSub =
         eventStream
-        |> Observable.map (fun (event, fileTransform) -> task {
+        |> Observable.map(fun (event, fileTransform) -> task {
           match event.changeType with
           | Changed when fileTransform.extension.ToLowerInvariant() = ".css" ->
             do! LiveReload.WriteHmrChange(event, fileTransform, res)
@@ -402,17 +399,17 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
           do! res.Body.FlushAsync()
         })
         |> Observable.switchTask
-        |> Observable.subscribe (fun _ ->
+        |> Observable.subscribe(fun _ ->
           logger.LogInformation "File Changed Event processed")
 
       let onCompilerErrorSub =
         compileErrors
-        |> Observable.map (fun error -> task {
+        |> Observable.map(fun error -> task {
           do! LiveReload.WriteCompileError(error, res)
           do! res.Body.FlushAsync()
         })
         |> Observable.switchTask
-        |> Observable.subscribe (fun _ ->
+        |> Observable.subscribe(fun _ ->
           logger.LogWarning "Compile Error Event processed")
 
       ctx.RequestAborted.Register(fun _ ->
@@ -441,7 +438,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
     doc.Head.AppendChild script |> ignore
     // remove standalone entry points, we don't need them in the browser
     doc.QuerySelectorAll("[data-entry-point=standalone][type=module]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     if config.devServer.liveReload then
       let liveReload = doc.CreateElement "script"
@@ -466,13 +463,13 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
     // remove any existing entry points, we don't need them in the tests
     doc.QuerySelectorAll("[data-entry-point][type=module]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     doc.QuerySelectorAll("[data-entry-point][rel=stylesheet]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     doc.QuerySelectorAll("[data-entry-point=standalone][type=module]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     for dependencyUrl in dependencies do
       let link = doc.CreateElement("link")
@@ -544,7 +541,7 @@ module Server =
       let listeners = props.GetActiveTcpListeners()
 
       listeners
-      |> Array.map (fun listener -> listener.Port)
+      |> Array.map(fun listener -> listener.Port)
       |> Array.contains address.Port
     else
       false
@@ -557,14 +554,14 @@ module Server =
       else
         $"http://{host}:{port}", $"https://{host}:{port + 1}"
     | true ->
-      Logger.log (
+      Logger.log(
         $"Address {host}:{port} is busy, selecting a dynamic port.",
         target = PrefixKind.Serve
       )
 
       $"http://{host}:{0}", $"https://{host}:{0}"
 
-  let getHttpClientAndForwarder () =
+  let getHttpClientAndForwarder() =
     let socketsHandler = new SocketsHttpHandler()
     socketsHandler.UseProxy <- false
     socketsHandler.AllowAutoRedirect <- false
@@ -583,7 +580,7 @@ module Server =
       app
         .UseRouting()
         .UseEndpoints(fun endpoints ->
-          let client, reqConfig = getHttpClientAndForwarder ()
+          let client, reqConfig = getHttpClientAndForwarder()
 
           for from, target in proxy |> Map.toSeq do
             let handler = Middleware.getProxyHandler target client reqConfig
@@ -636,10 +633,10 @@ module Server =
 
     app
 
-  let addResolveFile (app: WebApplication) =
+  let addResolveFile(app: WebApplication) =
     app.UseWhen(
       Func<HttpContext, bool>(fun ctx ->
-        not (ctx.Request.Path.StartsWithSegments(PathString("/~perla~")))),
+        not(ctx.Request.Path.StartsWithSegments(PathString("/~perla~")))),
       (fun app ->
         app.Use(
           Func<HttpContext, RequestDelegate, Task>(Middleware.ResolveFile)

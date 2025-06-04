@@ -32,16 +32,16 @@ module Dependencies =
 
   let DefaultResponseValues r =
     r
-    |> TaskResult.teeError (fun err ->
-      Logger.log (
+    |> TaskResult.teeError(fun err ->
+      Logger.log(
         $"Add should respect and add the requested pacakge failed: {err}"
       ))
     |> TaskResult.defaultValue { imports = Map.empty; scopes = None }
 
-  let AssertLodash (importMap: ImportMap, provider: Provider) =
+  let AssertLodash(importMap: ImportMap, provider: Provider) =
     match
       importMap.imports
-      |> Map.tryPick (fun k v -> if k = LodashName then Some v else None)
+      |> Map.tryPick(fun k v -> if k = LodashName then Some v else None)
     with
     | Some url ->
       match ExtractDependencyInfoFromUrl url with
@@ -55,10 +55,10 @@ module Dependencies =
         )
     | None -> Assert.Fail "The Entry is not in the dictionary"
 
-  let AssertLit (importMap: ImportMap, provider: Provider) =
+  let AssertLit(importMap: ImportMap, provider: Provider) =
     match
       importMap.imports
-      |> Map.tryPick (fun k v -> if k = LitName then Some v else None)
+      |> Map.tryPick(fun k v -> if k = LitName then Some v else None)
     with
     | Some url ->
       match ExtractDependencyInfoFromUrl url with
@@ -72,10 +72,10 @@ module Dependencies =
         )
     | None -> Assert.Fail "The Entry is not in the dictionary"
 
-  let AssertJQuery (importMap: ImportMap, provider: Provider) =
+  let AssertJQuery(importMap: ImportMap, provider: Provider) =
     match
       importMap.imports
-      |> Map.tryPick (fun k v -> if k = "jquery" then Some v else None)
+      |> Map.tryPick(fun k v -> if k = "jquery" then Some v else None)
     with
     | Some url ->
       match ExtractDependencyInfoFromUrl url with
@@ -90,7 +90,7 @@ module Dependencies =
     | None -> Assert.Fail "The Entry is not in the dictionary"
 
   [<Fact>]
-  let ``Add should respect and add the requested pacakge`` () = task {
+  let ``Add should respect and add the requested pacakge``() = task {
     let! result =
       Dependencies.Add(
         VersionedLit,
@@ -163,11 +163,11 @@ module Dependencies =
     task {
       let! (dependencies, importMap) =
         Dependencies.GetMapAndDependencies([ VersionedLodash ], Provider.Jspm)
-        |> TaskResult.teeError (fun err ->
-          Logger.log (
+        |> TaskResult.teeError(fun err ->
+          Logger.log(
             $"Add should respect and add the requested pacakge failed: {err}"
           ))
-        |> TaskResult.defaultValue ([], { imports = Map.empty; scopes = None })
+        |> TaskResult.defaultValue([], { imports = Map.empty; scopes = None })
 
       let url = Assert.Single(dependencies)
       Assert.Equal(LodashStaticUrl, url)

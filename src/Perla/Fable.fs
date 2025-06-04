@@ -78,11 +78,11 @@ type Fable =
     ) =
     task {
       let stdout =
-        let stdout = stdout |> Option.map (fun log -> Action<string>(log))
+        let stdout = stdout |> Option.map(fun log -> Action<string>(log))
         defaultArg stdout (Action<string>(printfn "Fable: %s"))
 
       let stderr =
-        let stderr = stderr |> Option.map (fun log -> Action<string>(log))
+        let stderr = stderr |> Option.map(fun log -> Action<string>(log))
         defaultArg stderr (Action<string>(eprintfn "Fable: %s"))
 
       let cmdResult =
@@ -105,7 +105,7 @@ type Fable =
     ) : IObservable<FableEvent> =
     let sub = Subject.replay
 
-    let EmitFableEvent (value: string) =
+    let EmitFableEvent(value: string) =
       if value.ToLowerInvariant().Contains("watching") then
         sub.OnNext(FableEvent.WaitingForChanges)
       else
@@ -119,11 +119,11 @@ type Fable =
         :?> Action<string>
 
     let stderr =
-      let stderr = stderr |> Option.map (fun stderr -> Action<string>(stderr))
+      let stderr = stderr |> Option.map(fun stderr -> Action<string>(stderr))
       defaultArg stderr (Action<string>(eprintfn "%s"))
 
     let cmdResult =
-      Fable.fableCmd (config, defaultArg isWatch true, stdout, stderr)
+      Fable.fableCmd(config, defaultArg isWatch true, stdout, stderr)
 
     async {
       try

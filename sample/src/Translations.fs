@@ -7,13 +7,11 @@ open Sutil
 
 let private translations = JsInterop.importDefault "./translations.json?js"
 
-let fetchTranslations () : TranslationCollection = translations
+let fetchTranslations() : TranslationCollection = translations
 
 let matchTranslationLanguage
-  (
-    translations: TranslationCollection option,
-    language: Language
-  ) =
+  (translations: TranslationCollection option, language: Language)
+  =
 
   match translations, language with
   | None, _ -> None
@@ -26,7 +24,7 @@ let getTranslationValue
   (translationKey: string)
   (language: TranslationMap option)
   =
-  language |> Option.map (fun trMap -> trMap[translationKey]) |> Option.flatten
+  language |> Option.map(fun trMap -> trMap[translationKey]) |> Option.flatten
 
 let T
   (store: IObservable<TranslationCollection option * Language>)

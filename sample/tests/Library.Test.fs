@@ -51,7 +51,7 @@ Describe(
       "matchTranslationLanguage with None should not bring anything",
       fun () ->
         let actual =
-          matchTranslationLanguage (None, Language.FromString("es-mx"))
+          matchTranslationLanguage(None, Language.FromString("es-mx"))
 
         expect(actual).``to``.``not``.exist |> ignore
     )
@@ -74,7 +74,7 @@ Describe(
 
         let sub =
           stream
-          |> Observable.subscribe (fun next -> values.Add(next) |> ignore)
+          |> Observable.subscribe(fun next -> values.Add(next) |> ignore)
 
         let mx = {|
           ``es-mx`` = {| lastName = "Apellido" |}
@@ -94,10 +94,10 @@ Describe(
         obs.Broadcast(Some(us |> box |> unbox), EnUs)
 
         sub.Dispose()
-        expect(values).``to``.``include`` ("Vorname")
-        expect(values).``to``.``include`` ("Last Name")
-        expect(values).``to``.``include`` ("Apellido")
-        expect(values).``to``.``include`` ("Nom de famille")
+        expect(values).``to``.``include``("Vorname")
+        expect(values).``to``.``include``("Last Name")
+        expect(values).``to``.``include``("Apellido")
+        expect(values).``to``.``include``("Nom de famille")
         obs.Complete()
     ))
 )

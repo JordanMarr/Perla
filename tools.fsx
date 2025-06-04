@@ -26,7 +26,7 @@ let PackageVersion = "1.0.0-beta-024"
 let fsSources =
   Glob.create "*.fsx"
   |> Glob.toPaths
-  |> Seq.append (
+  |> Seq.append(
     Glob.createWithRootDir "src" "**/*.fs"
     |> Glob.add "**/*.fsi"
     |> Glob.exclude "**/fable_modules/*.fs"
@@ -55,7 +55,7 @@ module Operations =
       )
   }
 
-  let fantomas (command: string) = make {
+  let fantomas(command: string) = make {
     let! result =
       Cmd.createWithArgs "dotnet" [ "fantomas"; command; yield! fsSources ]
       |> Cmd.checkExitCode Cmd.ExitCodeCheckOption.CheckCodeNone
@@ -64,14 +64,14 @@ module Operations =
 
     match result.ExitCode with
     | 0 -> return ()
-    | 99 -> return! Make.fail (nameof FantomasError.PendingFormat)
-    | _ -> return! Make.fail (nameof FantomasError.FailedToFormat)
+    | 99 -> return! Make.fail(nameof FantomasError.PendingFormat)
+    | _ -> return! Make.fail(nameof FantomasError.FailedToFormat)
   }
 
-  let dotnet (args: string) =
+  let dotnet(args: string) =
     Cmd.createWithArgs "dotnet" (args.Split(' ') |> List.ofArray) |> Cmd.run
 
-  let nugetPush (nupkg: string, apiKey) =
+  let nugetPush(nupkg: string, apiKey) =
     Cmd.createWithArgs "dotnet" [
       "nuget"
       "push"
@@ -118,7 +118,7 @@ module Steps =
 
 
     runtimes
-    |> Array.Parallel.iter (fun runtime ->
+    |> Array.Parallel.iter(fun runtime ->
       let sources = $"{outDir}/{runtime}"
       ZipFile.CreateFromDirectory(sources, $"{outDir}/{runtime}.zip")
       Directory.Delete(sources, true))
@@ -172,7 +172,7 @@ module Steps =
 
     for library in projects @ libraries do
       let nupkName = $"./dist/{library}.{PackageVersion}.nupkg"
-      do! Operations.nugetPush (nupkName, apiKey)
+      do! Operations.nugetPush(nupkName, apiKey)
   }
 
 module Pipelines =

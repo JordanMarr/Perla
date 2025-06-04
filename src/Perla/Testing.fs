@@ -30,7 +30,7 @@ type ReportedError = {
 
 module Print =
 
-  let test (test: Test, error: (string * string) option) : IRenderable list =
+  let test(test: Test, error: (string * string) option) : IRenderable list =
     let stateColor =
       match test.state with
       | Some "passed" -> "green"
@@ -58,7 +58,7 @@ module Print =
       | _ -> ()
     ]
 
-  let suite (suite: Suite, includeTests: bool) : IRenderable =
+  let suite(suite: Suite, includeTests: bool) : IRenderable =
     let skipped = if suite.pending then "skipped" else ""
 
     let rows: IRenderable list = [
@@ -66,7 +66,7 @@ module Print =
       if includeTests then
         yield!
           suite.tests
-          |> List.map (fun suiteTest -> test (suiteTest, None) |> List.head)
+          |> List.map(fun suiteTest -> test(suiteTest, None) |> List.head)
     ]
 
     Panel(
@@ -74,7 +74,7 @@ module Print =
       Header = PanelHeader($"[bold yellow]{suite.fullTitle.EscapeMarkup()}[/]")
     )
 
-  let Stats (stats: TestStats) =
+  let Stats(stats: TestStats) =
 
     let content =
       let content: IRenderable seq = [
@@ -99,20 +99,17 @@ module Print =
 type Print =
 
   static member Test(test: Test, ?error: string * string) =
-    Print.test (test, error) |> Rows |> AnsiConsole.Write
+    Print.test(test, error) |> Rows |> AnsiConsole.Write
 
   static member Suite(suite: Suite, ?includeTests: bool) =
-    Print.suite (suite, defaultArg includeTests false)
+    Print.suite(suite, defaultArg includeTests false)
     |> Rows
     |> AnsiConsole.Write
 
   static member Report
-    (
-      stats: TestStats,
-      suites: Suite list,
-      errors: ReportedError list
-    ) =
-    let getChartItem (color, label, value) =
+    (stats: TestStats, suites: Suite list, errors: ReportedError list)
+    =
+    let getChartItem(color, label, value) =
       { new IBreakdownChartItem with
           member _.Color = color
           member _.Label = label
@@ -125,17 +122,17 @@ type Print =
 
       chart.AddItems(
         [
-          getChartItem (Color.Green, "Tests Passed", stats.passes)
-          getChartItem (Color.Red, "Tests Failed", stats.failures)
+          getChartItem(Color.Green, "Tests Passed", stats.passes)
+          getChartItem(Color.Red, "Tests Failed", stats.failures)
         ]
       )
 
-    let endTime = stats.``end`` |> Option.defaultWith (fun _ -> DateTime.Now)
+    let endTime = stats.``end`` |> Option.defaultWith(fun _ -> DateTime.Now)
     let difference = endTime - stats.start
 
     let rows: IRenderable seq = [
       for suite in suites do
-        Print.suite (suite, true)
+        Print.suite(suite, true)
       if errors.Length > 0 then
         Rule("Test run errors", Style = Style.Parse("bold red"))
 
@@ -160,8 +157,8 @@ type Print =
     rows |> Rows |> AnsiConsole.Write
 
 module Testing =
-  let SetupPlaywright () =
-    Logger.log (
+  let SetupPlaywright() =
+    Logger.log(
       "[bold yellow]Setting up playwright...[/] This will install [bold cyan]all[/] of the supported browsers",
       escape = false
     )
@@ -170,12 +167,12 @@ module Testing =
       let exitCode = Program.Main([| "install" |])
 
       if exitCode = 0 then
-        Logger.log (
+        Logger.log(
           "[bold yellow]Playwright setup[/] [bold green]complete[/]",
           escape = false
         )
       else
-        Logger.log (
+        Logger.log(
           "[bold red]We couldn't setup Playwright[/]: you may need to set it up manually",
           escape = false
         )
@@ -184,7 +181,7 @@ module Testing =
           "For more information please visit https://playwright.dev/dotnet/docs/browsers"
 
     with ex ->
-      Logger.log (
+      Logger.log(
         "[bold red]We couldn't setup Playwright[/]: you may need to set it up manually",
         ex = ex,
         escape = false
@@ -199,14 +196,14 @@ module Testing =
     : TestStats * Suite list * ReportedError list =
     let suiteEnds =
       events
-      |> List.choose (fun event ->
+      |> List.choose(fun event ->
         match event with
         | SuiteEnd(_, _, suite) -> Some suite
         | _ -> None)
 
     let errors =
       events
-      |> List.choose (fun event ->
+      |> List.choose(fun event ->
         match event with
         | TestFailed(_, _, test, message, stack) ->
           Some {
@@ -224,11 +221,11 @@ module Testing =
 
     let stats =
       events
-      |> List.tryPick (fun event ->
+      |> List.tryPick(fun event ->
         match event with
         | SessionEnd(_, stats) -> Some stats
         | _ -> None)
-      |> Option.defaultWith (fun _ -> {
+      |> Option.defaultWith(fun _ -> {
         suites = 0
         tests = 0
         passes = 0
@@ -319,7 +316,7 @@ module Testing =
     AnsiConsole.Clear()
     Print.Report(overallStats, suites, errors)
 
-  let PrintReportLive (events: IObservable<TestEvent>) =
+  let PrintReportLive(events: IObservable<TestEvent>) =
     AnsiConsole
       .Progress(HideCompleted = false, AutoClear = false)
       .Start(fun ctx ->
@@ -349,7 +346,7 @@ module Testing =
         let failImport = failImport errors
 
         events
-        |> Observable.subscribeSafe (fun value ->
+        |> Observable.subscribeSafe(fun value ->
           match value with
           | SessionStart(_, _, totalTests) -> startNotifications totalTests
           | SessionEnd(_, stats) ->
@@ -357,19 +354,19 @@ module Testing =
             endSession tasks
           | TestPass _ -> passTest tasks
           | TestFailed(_, _, test, message, stack) ->
-            failTest (test, message, stack)
+            failTest(test, message, stack)
           | SuiteStart(_, stats, _) -> overallStats <- stats
           | SuiteEnd(_, stats, suite) ->
             overallStats <- stats
             endSuite suite
-          | TestImportFailed(_, message, stack) -> failImport (message, stack)
+          | TestImportFailed(_, message, stack) -> failImport(message, stack)
           | TestRunFinished _ ->
             signalEnd
               overallStats
               (suites |> Seq.toList)
               (errors |> Seq.toList)))
 
-  let getBrowser (browser: Browser, headless: bool, pl: IPlaywright) = task {
+  let getBrowser(browser: Browser, headless: bool, pl: IPlaywright) = task {
     let options =
       BrowserTypeLaunchOptions(Devtools = not headless, Headless = headless)
 
@@ -385,13 +382,13 @@ module Testing =
     | Browser.Webkit -> return! pl.Webkit.LaunchAsync(options)
   }
 
-  let monitorPageLogs (page: IPage) =
+  let monitorPageLogs(page: IPage) =
     page.Console
-    |> Observable.subscribeSafe (fun e ->
+    |> Observable.subscribeSafe(fun e ->
       let getText color =
         $"[bold {color}]{e.Text.EscapeMarkup()}[/]".EscapeMarkup()
 
-      let writeRule () =
+      let writeRule() =
         let rule =
           Rule(
             $"[dim blue]{e.Location}[/]",
@@ -404,26 +401,26 @@ module Testing =
       match e.Type with
       | Debug -> ()
       | Info ->
-        Logger.log (getText "cyan", target = PrefixKind.Browser)
-        writeRule ()
+        Logger.log(getText "cyan", target = PrefixKind.Browser)
+        writeRule()
       | Err ->
-        Logger.log (getText "red", target = PrefixKind.Browser)
-        writeRule ()
+        Logger.log(getText "red", target = PrefixKind.Browser)
+        writeRule()
       | Warning ->
-        Logger.log (getText "orange", target = PrefixKind.Browser)
-        writeRule ()
+        Logger.log(getText "orange", target = PrefixKind.Browser)
+        writeRule()
       | Clear ->
         let link = $"[link]{e.Location.EscapeMarkup()}[/]"
 
-        Logger.log (
+        Logger.log(
           $"Browser Console cleared at: {link.EscapeMarkup()}",
           target = PrefixKind.Browser
         )
 
-        writeRule ()
+        writeRule()
       | _ ->
-        Logger.log ($"{e.Text.EscapeMarkup()}", target = PrefixKind.Browser)
-        writeRule ()
+        Logger.log($"{e.Text.EscapeMarkup()}", target = PrefixKind.Browser)
+        writeRule()
 
     )
 
@@ -457,7 +454,7 @@ type Testing =
 
       do! page.GotoAsync url :> Task
 
-      Logger.log (
+      Logger.log(
         $"Starting session for {browser.AsString}: {iBrowser.Version}",
         target = PrefixKind.Browser
       )
@@ -474,11 +471,8 @@ type Testing =
     }
 
   static member GetLiveExecutor
-    (
-      url: string,
-      browser: Browser,
-      fileChanges: IObservable<unit>
-    ) =
+    (url: string, browser: Browser, fileChanges: IObservable<unit>)
+    =
     fun (iBrowser: IBrowser) -> task {
       let! page =
         iBrowser.NewPageAsync(BrowserNewPageOptions(IgnoreHTTPSErrors = true))
@@ -487,15 +481,15 @@ type Testing =
 
       do! page.GotoAsync url :> Task
 
-      Logger.log (
+      Logger.log(
         $"Starting session for {browser.AsString}: {iBrowser.Version}",
         target = PrefixKind.Browser
       )
 
       return
         fileChanges
-        |> Observable.map (fun _ ->
+        |> Observable.map(fun _ ->
           page.ReloadAsync() |> Async.AwaitTask |> Async.Ignore)
         |> Observable.switchAsync
-        |> Observable.finallyDo (fun _ -> monitor.Dispose())
+        |> Observable.finallyDo(fun _ -> monitor.Dispose())
     }

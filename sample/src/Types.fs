@@ -23,7 +23,7 @@ type Language =
     | "es-mx" -> EsMx
     | "de-de" -> DeDe
     | value ->
-      JS.console.warn ($"'%s{value}' is not a known value")
+      JS.console.warn($"'%s{value}' is not a known value")
       Unknown value
 
 

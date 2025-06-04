@@ -74,7 +74,7 @@ module PackageManager =
 
         let! dependencyInfos =
           packages
-          |> Seq.map (fun package ->
+          |> Seq.map(fun package ->
             Skypack.PackageUrls(package, isProduction, ?esVersion = esVersion))
           |> System.Threading.Tasks.Task.WhenAll
 

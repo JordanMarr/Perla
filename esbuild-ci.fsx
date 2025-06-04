@@ -10,18 +10,18 @@ open Flurl.Http
 open ICSharpCode.SharpZipLib.GZip
 open ICSharpCode.SharpZipLib.Tar
 
-let EsbuildBinaryPath () : string =
+let EsbuildBinaryPath() : string =
   "/home/runner/.local/share/perla/0.19.5/package/bin/esbuild"
   |> Path.GetFullPath
 
-let chmodBinCmd () =
+let chmodBinCmd() =
   Cli
     .Wrap("chmod")
     .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
     .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
     .WithArguments($"+x {EsbuildBinaryPath()}")
 
-let tryDownloadEsBuild () : Task<string option> =
+let tryDownloadEsBuild() : Task<string option> =
   let url =
     "https://registry.npmjs.org/@esbuild/linux-x64/-/linux-x64-0.19.5.tgz"
 
@@ -45,7 +45,7 @@ let tryDownloadEsBuild () : Task<string option> =
       return None
   }
 
-let decompressEsbuild (path: Task<string option>) = task {
+let decompressEsbuild(path: Task<string option>) = task {
   match! path with
   | Some path ->
 
@@ -70,7 +70,7 @@ let decompressEsbuild (path: Task<string option>) = task {
   return ()
 }
 
-tryDownloadEsBuild ()
+tryDownloadEsBuild()
 |> decompressEsbuild
 |> Async.AwaitTask
 |> Async.RunSynchronously

@@ -6,7 +6,7 @@ open Perla.Types
 module RunConfiguration =
 
   [<Fact>]
-  let ``RunConfiguration should be able to be converted from string`` () =
+  let ``RunConfiguration should be able to be converted from string``() =
     Assert.Equal(
       RunConfiguration.Production,
       RunConfiguration.FromString "prod"
@@ -33,14 +33,14 @@ module RunConfiguration =
     )
 
   [<Fact>]
-  let ``RunConfiguration should be able to be converted to string`` () =
+  let ``RunConfiguration should be able to be converted to string``() =
     Assert.Equal("production", RunConfiguration.Production.AsString)
     Assert.Equal("development", RunConfiguration.Development.AsString)
 
 module Dependency =
 
   [<Fact>]
-  let ``Dependency should be able to give a versioned string`` () =
+  let ``Dependency should be able to give a versioned string``() =
     Assert.Equal(
       "lit@2.0.0",
       {

@@ -11,7 +11,7 @@ open Perla.Types
 open Perla.PackageManager.Types
 
 [<Fact>]
-let ``PerlaDecoder Should Decode from an empty object`` () =
+let ``PerlaDecoder Should Decode from an empty object``() =
   match Decode.fromString ConfigDecoders.PerlaDecoder "{}" with
   | Ok decoded ->
 
@@ -32,7 +32,7 @@ let ``PerlaDecoder Should Decode from an empty object`` () =
 
 
 [<Fact>]
-let ``Json.FromConfig Should Decode from an empty object`` () =
+let ``Json.FromConfig Should Decode from an empty object``() =
   match Json.FromConfigFile "{}" with
   | Ok decoded ->
 
@@ -52,7 +52,7 @@ let ``Json.FromConfig Should Decode from an empty object`` () =
   | Error err -> Assert.Fail $"Decoder couldn't decode due: {err}"
 
 [<Fact>]
-let ``PerlaDecoder Should Decode from a complete object`` () =
+let ``PerlaDecoder Should Decode from a complete object``() =
   let json =
     """
 {
@@ -90,7 +90,7 @@ let ``PerlaDecoder Should Decode from a complete object`` () =
       Assert.NotEmpty(mountDirectories)
 
       mountDirectories
-      |> Map.tryFindKey (fun k _ -> k = (UMX.tag "/src"))
+      |> Map.tryFindKey(fun k _ -> k = (UMX.tag "/src"))
       |> Option.isSome
       |> Assert.True
 
@@ -126,7 +126,7 @@ let ``PerlaDecoder Should Decode from a complete object`` () =
   | Error err -> Assert.Fail $"Decoder couldn't decode due: {err}"
 
 [<Fact>]
-let ``PerlaDecoder Should Decode Fable options`` () =
+let ``PerlaDecoder Should Decode Fable options``() =
   let json =
     """
 { "fable": {
@@ -162,7 +162,7 @@ let ``PerlaDecoder Should Decode Fable options`` () =
 
 
 [<Fact>]
-let ``PerlaDecoder Should Decode DevServer options`` () =
+let ``PerlaDecoder Should Decode DevServer options``() =
   let json =
     """
 { "devServer": {
@@ -193,19 +193,19 @@ let ``PerlaDecoder Should Decode DevServer options`` () =
     Assert.False(devServer.useSSL |> Option.defaultValue true)
 
     devServer.proxy
-    |> Option.map (fun map ->
+    |> Option.map(fun map ->
       map
-      |> Map.tryFindKey (fun k _ -> k = "/v1/api/{**catch-all}")
+      |> Map.tryFindKey(fun k _ -> k = "/v1/api/{**catch-all}")
       |> Option.isSome
       |> Assert.True)
-    |> Option.defaultWith (fun _ ->
+    |> Option.defaultWith(fun _ ->
       Assert.Fail "Proxy Should have at least one key")
   | Ok { devServer = None } ->
     Assert.Fail $"DevServer is empty when it must have a value"
   | Error err -> Assert.Fail $"Decoder couldn't decode due: {err}"
 
 [<Fact>]
-let ``PerlaDecoder Should Decode Build options`` () =
+let ``PerlaDecoder Should Decode Build options``() =
   let json =
     """
 { "build": {
@@ -241,7 +241,7 @@ let ``PerlaDecoder Should Decode Build options`` () =
 
 
 [<Fact>]
-let ``PerlaDecoder Should Decode Esbuild options`` () =
+let ``PerlaDecoder Should Decode Esbuild options``() =
   let json =
     """
 { "esbuild": {
@@ -298,7 +298,7 @@ let ``PerlaDecoder Should Decode Esbuild options`` () =
     Assert.Equal(
       true,
       esbuild.jsxAutomatic
-      |> Option.defaultWith (fun _ -> failwith "jsxAutomatic is not present")
+      |> Option.defaultWith(fun _ -> failwith "jsxAutomatic is not present")
     )
 
     Assert.Equal(

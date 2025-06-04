@@ -13,7 +13,7 @@ type IExpect =
   abstract ``include``<'T> : 'T -> unit
 
 [<ImportMember "@esm-bundle/chai">]
-let expect (value: obj) : IExpect = jsNative
+let expect(value: obj) : IExpect = jsNative
 
 [<Erase>]
 type Testing =
@@ -23,10 +23,8 @@ type Testing =
 
   [<Emit("describe($0, $1)")>]
   static member Describe
-    (
-      name: string,
-      callback: unit -> JS.Promise<unit>
-    ) : unit =
+    (name: string, callback: unit -> JS.Promise<unit>)
+    : unit =
     jsNative
 
   [<Emit("it($0, $1)")>]

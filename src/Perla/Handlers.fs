@@ -172,16 +172,16 @@ module Templates =
     Templates.Add(user, repository, branch)
 
 
-  let List (options: ListTemplatesOptions) =
+  let List(options: ListTemplatesOptions) =
     let results =
       Templates.ListTemplateItems()
-      |> List.groupBy (fun x -> x.parent)
-      |> List.choose (fun (parentId, children) ->
+      |> List.groupBy(fun x -> x.parent)
+      |> List.choose(fun (parentId, children) ->
         match Templates.FindOne(TemplateSearchKind.Id parentId) with
         | Some parent -> Some(parent, children)
         | None -> None)
-      |> List.collect (fun (parent, children) ->
-        children |> List.map (fun child -> (parent, child)))
+      |> List.collect(fun (parent, children) ->
+        children |> List.map(fun child -> (parent, child)))
 
     match options.format with
     | ListFormat.HumanReadable ->
@@ -235,11 +235,11 @@ module Templates =
 
       0
 
-  let AddOrUpdate (operation: TemplateOperation) = taskResult {
-    let listTemplates () =
+  let AddOrUpdate(operation: TemplateOperation) = taskResult {
+    let listTemplates() =
       List { format = ListFormat.HumanReadable } |> ignore
 
-      Logger.log (
+      Logger.log(
         "[bold yellow]perla[/] [bold blue]new [/] [bold blue] <PROJECT_NAME>[/]",
         escape = false
       )
@@ -251,18 +251,18 @@ module Templates =
       let username, repository, branch = repoName
 
       do!
-        Logger.spinner (
+        Logger.spinner(
           $"Adding templates from: {username}/{repository}:{branch}",
           (addTemplate username repository branch)
         )
         |> TaskResult.ignore
 
-      listTemplates ()
+      listTemplates()
       return ()
     | TemplateOperation.Update template ->
       do! taskResult {
         let! result =
-          Logger.spinner (
+          Logger.spinner(
             $"Updating templates from: {template.ToFullNameWithBranch}",
             (updateTemplate template template.branch)
           )
@@ -275,21 +275,21 @@ module Templates =
               "We were unable to update the existing [bold red]templates[/]."
       }
 
-      listTemplates ()
+      listTemplates()
       return ()
   }
 
-  let Remove (template: PerlaTemplateRepository) : Result<unit, string> =
+  let Remove(template: PerlaTemplateRepository) : Result<unit, string> =
     Templates.Delete(TemplateSearchKind.Id template._id)
     |> Result.requireTrue
       "There was an error while trying to delete this template."
 
 module Fable =
-  let StartFable (config: PerlaConfig, cancel: CancellationToken) = task {
+  let StartFable(config: PerlaConfig, cancel: CancellationToken) = task {
     match config.fable with
     | Some fable -> do! Fable.Start(fable, cancellationToken = cancel) :> Task
     | None ->
-      Logger.log (
+      Logger.log(
         "No Fable configuration provided, skipping fable",
         target = PrefixKind.Build
       )
@@ -310,15 +310,11 @@ module FsMonitor =
     |> AsyncSeq.iter ignore
 
   let FileChanges
-    (
-      index: string,
-      mountDirectories,
-      perlaFilesChanges,
-      plugins: string list
-    ) =
+    (index: string, mountDirectories, perlaFilesChanges, plugins: string list)
+    =
     let perlaFilesChanges =
       perlaFilesChanges
-      |> Observable.map (fun event ->
+      |> Observable.map(fun event ->
         let name, path, extension =
           match event with
           | PerlaFileChange.Index ->
@@ -329,7 +325,7 @@ module FsMonitor =
              ".json")
           | PerlaFileChange.ImportMap ->
             (Constants.ImportMapName,
-             UMX.untag (FileSystem.GetConfigPath Constants.ImportMapName None),
+             UMX.untag(FileSystem.GetConfigPath Constants.ImportMapName None),
              ".importmap")
 
         {
@@ -389,7 +385,7 @@ module Esbuild =
       let aliases =
         // remove all the paths that are not relative
         let aliases =
-          config.paths |> Map.filter (fun _ v -> (UMX.untag v).StartsWith("./"))
+          config.paths |> Map.filter(fun _ v -> (UMX.untag v).StartsWith("./"))
 
         // if the env is enabled, also check if we want to produce the file
         // if the user doesn't want to produce the file it is likely that they
@@ -447,7 +443,7 @@ module Testing =
         browser, iBrowser
     }
 
-    let runTest (browser, iBrowser) = async {
+    let runTest(browser, iBrowser) = async {
       let executor = Testing.GetExecutor(url, browser)
       do! executor iBrowser |> Async.AwaitTask
       do! iBrowser.CloseAsync() |> Async.AwaitTask
@@ -485,7 +481,7 @@ module Testing =
 
       use _ =
         pageReloads
-        |> Observable.subscribeSafe (fun _ ->
+        |> Observable.subscribeSafe(fun _ ->
           Logger.log $"Live Reload: Page Reloaded After Change")
 
       while not cancel.IsCancellationRequested do
@@ -497,7 +493,7 @@ module Handlers =
   open Perla.Database
   open Perla.Extensibility
 
-  let runSetup (options: SetupOptions, cancellationToken: CancellationToken) = task {
+  let runSetup(options: SetupOptions, cancellationToken: CancellationToken) = task {
     Logger.log "Perla will set up the following resources:"
     Logger.log "- Esbuild"
     Logger.log "- Default Templates"
@@ -513,17 +509,17 @@ module Handlers =
 
     Checks.SaveEsbuildBinPresent(UMX.tag Constants.Esbuild_Version) |> ignore
 
-    Logger.log ("[bold green]esbuild[/] has been setup!", escape = false)
+    Logger.log("[bold green]esbuild[/] has been setup!", escape = false)
 
     let username, repository, branch =
       PerlaTemplateRepository.DefaultTemplatesRepository
 
-    let getTemplate () =
+    let getTemplate() =
       TemplateSearchKind.FullName(username, repository)
       |> Templates.FindOne
-      |> Option.map (fun template ->
+      |> Option.map(fun template ->
         Templates.AddOrUpdate(Templates.TemplateOperation.Update template))
-      |> Option.defaultWith (fun () ->
+      |> Option.defaultWith(fun () ->
         Templates.AddOrUpdate(
           Templates.TemplateOperation.Add(username, repository, branch)
         ))
@@ -531,7 +527,7 @@ module Handlers =
     match options.skipPrompts, options.installTemplates with
     | false, true
     | true, true ->
-      let! operation = getTemplate ()
+      let! operation = getTemplate()
 
       match operation with
       | Ok() ->
@@ -543,7 +539,7 @@ module Handlers =
         return 1
     | true, false ->
       if AnsiConsole.Confirm("Add default templates?", false) then
-        let! operation = getTemplate ()
+        let! operation = getTemplate()
 
         match operation with
         | Ok() ->
@@ -566,14 +562,12 @@ module Handlers =
   }
 
   let runNew
-    (
-      options: ProjectOptions,
-      cancellationToken: CancellationToken
-    ) : Task<int> =
+    (options: ProjectOptions, cancellationToken: CancellationToken)
+    : Task<int> =
     Logger.log "Creating new project..."
     let mutable mentionQuickCommand = false
 
-    let inline byId () =
+    let inline byId() =
       options.byId
       |> Option.map UMX.tag<TemplateGroup>
       |> Option.map QuickAccessSearch.Group
@@ -607,13 +601,13 @@ module Handlers =
         return Templates.Existing found
     }
 
-    let inline TemplateItemPromptConverter (item: TemplateItem) =
+    let inline TemplateItemPromptConverter(item: TemplateItem) =
       let description =
         item.description |> Option.defaultValue "No description provided."
 
       $"{item.name} - {item.shortName}: {description[0..30]}"
 
-    let inline TemplateConfigPromptConverter (item: TemplateConfigurationItem) =
+    let inline TemplateConfigPromptConverter(item: TemplateConfigurationItem) =
       $"{item.name} - {item.shortName}: {item.description[0..30]}"
 
     let selectedItem =
@@ -692,7 +686,7 @@ module Handlers =
       | Some item ->
         let scriptContent =
           Templates.GetTemplateScriptContent(TemplateScriptKind.Template item)
-          |> Option.orElseWith (fun () -> option {
+          |> Option.orElseWith(fun () -> option {
             let! repo = Templates.FindOne(TemplateSearchKind.Id item.parent)
 
             return!
@@ -717,7 +711,7 @@ module Handlers =
           let groupCmd =
             $"perla new [blue]<my-project-name>[/] [yellow]-id {item.group}[/]"
 
-          Logger.log (
+          Logger.log(
             $"You can run this template directly with:\n{ffCmd}\n{groupCmd}",
             escape = false
           )
@@ -725,7 +719,7 @@ module Handlers =
         let chdir = $"cd ./{options.projectName}"
         let serve = "perla serve"
 
-        Logger.log (
+        Logger.log(
           $"Project [green]{options.projectName}[/] created!, to get started run:\n{chdir}\n{serve}",
           escape = false
         )
@@ -742,10 +736,8 @@ module Handlers =
     }
 
   let runTemplate
-    (
-      options: TemplateRepositoryOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: TemplateRepositoryOptions, cancellationToken: CancellationToken)
+    =
     task {
       let template = voption {
         let! username, repository, _ =
@@ -755,7 +747,7 @@ module Handlers =
           TemplateSearchKind.FullName(username, repository) |> Templates.FindOne
       }
 
-      let updateRepo () = task {
+      let updateRepo() = task {
         match template with
         | ValueSome template ->
           Logger.log $"Template {template.ToFullNameWithBranch} already exists."
@@ -765,12 +757,12 @@ module Handlers =
           with
           | Ok() -> return 0
           | Error err ->
-            Logger.log (err, escape = false)
+            Logger.log(err, escape = false)
             return 1
         | ValueNone ->
           Logger.log "We were unable to parse the repository name."
 
-          Logger.log (
+          Logger.log(
             "please ensure that the repository name is in the format: [bold blue]username/repository:branch[/]",
             escape = false
           )
@@ -789,20 +781,20 @@ module Handlers =
           with
           | Ok() -> return 0
           | Error err ->
-            Logger.log (err, escape = false)
+            Logger.log(err, escape = false)
             return 1
         | ValueNone ->
           Logger.log "We were unable to parse the repository name."
 
-          Logger.log (
+          Logger.log(
             "please ensure that the repository name is in the format: [bold blue]username/repository:branch[/]",
             escape = false
           )
 
           return 1
-      | RunTemplateOperation.Update -> return! updateRepo ()
+      | RunTemplateOperation.Update -> return! updateRepo()
       | RunTemplateOperation.Update
-      | RunTemplateOperation.Add when template.IsSome -> return! updateRepo ()
+      | RunTemplateOperation.Add when template.IsSome -> return! updateRepo()
       | RunTemplateOperation.Remove ->
         match template with
         | ValueSome template ->
@@ -813,12 +805,12 @@ module Handlers =
             Logger.log "Template removed successfully."
             return 0
           | Error err ->
-            Logger.log (err, escape = false)
+            Logger.log(err, escape = false)
             return 1
         | ValueNone ->
           Logger.log "We were unable to parse the repository name."
 
-          Logger.log (
+          Logger.log(
             "please ensure that the repository name is in the format: [bold blue]username/repository:branch[/]",
             escape = false
           )
@@ -826,7 +818,7 @@ module Handlers =
           return 1
     }
 
-  let runBuild (options: BuildOptions, cancellationToken: CancellationToken) = task {
+  let runBuild(options: BuildOptions, cancellationToken: CancellationToken) = task {
 
     ConfigurationManager.UpdateFromCliArgs(?runConfig = options.mode)
     let config = ConfigurationManager.CurrentConfig
@@ -846,15 +838,15 @@ module Handlers =
     | Error err ->
       for err in err do
         match err with
-        | NoPluginFound name -> Logger.log ($"Plugin {name} not found")
+        | NoPluginFound name -> Logger.log($"Plugin {name} not found")
         | EvaluationFailed(ex) ->
-          Logger.log ($"Failed to evaluate plugin", ex = ex)
+          Logger.log($"Failed to evaluate plugin", ex = ex)
         | SessionExists
         | BoundValueMissing -> Logger.log "Failed to load plugins"
-        | AlreadyLoaded name -> Logger.log ($"Plugin {name} already loaded")
+        | AlreadyLoaded name -> Logger.log($"Plugin {name} already loaded")
 
     do!
-      Logger.spinner (
+      Logger.spinner(
         "Mounting Virtual File System",
         VirtualFileSystem.Mount config
       )
@@ -862,7 +854,7 @@ module Handlers =
     let tempDirectory = VirtualFileSystem.CopyToDisk() |> UMX.tag
 
 
-    Logger.log (
+    Logger.log(
       $"Copying Processed files to {tempDirectory}",
       target = PrefixKind.Build
     )
@@ -887,7 +879,7 @@ module Handlers =
     let css, js, standalone = Build.GetEntryPoints(document)
 
     do!
-      Logger.spinner (
+      Logger.spinner(
         "Transpiling CSS and JS Files",
         Esbuild.Run(
           config,
@@ -904,7 +896,7 @@ module Handlers =
       yield! css
       yield!
         fs.EnumerateFiles(tmp, "*.css", SearchOption.AllDirectories)
-        |> Seq.map (fun path -> fs.ConvertPathToInternal path |> UMX.tag)
+        |> Seq.map(fun path -> fs.ConvertPathToInternal path |> UMX.tag)
     ]
 
 
@@ -933,7 +925,7 @@ module Handlers =
     try
       Directory.Delete(UMX.untag tempDirectory, true)
     with ex ->
-      Logger.log ($"Failed to delete {tempDirectory}", ex = ex)
+      Logger.log($"Failed to delete {tempDirectory}", ex = ex)
 
 
     if options.enablePreview then
@@ -941,8 +933,7 @@ module Handlers =
       do! app.StartAsync(cancellationToken)
 
       app.Urls
-      |> Seq.iter (fun url ->
-        Logger.log ($"Listening at: {url}", target = Serve))
+      |> Seq.iter(fun url -> Logger.log($"Listening at: {url}", target = Serve))
 
       while not cancellationToken.IsCancellationRequested do
         do! Async.Sleep(1000)
@@ -952,7 +943,7 @@ module Handlers =
     return 0
   }
 
-  let runServe (options: ServeOptions, cancellationToken: CancellationToken) = task {
+  let runServe(options: ServeOptions, cancellationToken: CancellationToken) = task {
 
     let cliArgs = [
       match options.port with
@@ -987,9 +978,9 @@ module Handlers =
 
     use _ =
       fableEvents
-      |> Observable.subscribeSafe (fun events ->
+      |> Observable.subscribeSafe(fun events ->
         match events with
-        | FableEvent.Log msg -> Logger.log (msg.EscapeMarkup())
+        | FableEvent.Log msg -> Logger.log(msg.EscapeMarkup())
         | FableEvent.ErrLog msg ->
           Logger.log $"[bold red]{msg.EscapeMarkup()}[/]"
         | FableEvent.WaitingForChanges -> ())
@@ -1001,12 +992,12 @@ module Handlers =
     | Error err ->
       for err in err do
         match err with
-        | NoPluginFound name -> Logger.log ($"Plugin {name} not found")
+        | NoPluginFound name -> Logger.log($"Plugin {name} not found")
         | EvaluationFailed(ex) ->
-          Logger.log ($"Failed to evaluate plugin", ex = ex)
+          Logger.log($"Failed to evaluate plugin", ex = ex)
         | SessionExists
         | BoundValueMissing -> Logger.log "Failed to load plugins"
-        | AlreadyLoaded name -> Logger.log ($"Plugin {name} already loaded")
+        | AlreadyLoaded name -> Logger.log($"Plugin {name} already loaded")
 
     do! VirtualFileSystem.Mount(config)
 
@@ -1028,16 +1019,16 @@ module Handlers =
     do! app.StartAsync(cancellationToken)
 
     app.Urls
-    |> Seq.iter (fun url -> Logger.log ($"Listening at: {url}", target = Serve))
+    |> Seq.iter(fun url -> Logger.log($"Listening at: {url}", target = Serve))
 
     perlaChanges
-    |> Observable.throttle (TimeSpan.FromMilliseconds(500.))
+    |> Observable.throttle(TimeSpan.FromMilliseconds(500.))
     |> Observable.choose (function
       | PerlaFileChange.PerlaConfig -> Some()
       | _ -> None)
-    |> Observable.map (fun _ -> app.StopAsync() |> Async.AwaitTask)
+    |> Observable.map(fun _ -> app.StopAsync() |> Async.AwaitTask)
     |> Observable.switchAsync
-    |> Observable.add (fun _ ->
+    |> Observable.add(fun _ ->
       ConfigurationManager.UpdateFromFile()
       app <- Server.GetServerApp(config, fileChanges, compilerErrors)
       app.StartAsync(cancellationToken) |> ignore)
@@ -1049,10 +1040,8 @@ module Handlers =
   }
 
   let runTesting
-    (
-      options: TestingOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: TestingOptions, cancellationToken: CancellationToken)
+    =
     task {
 
       ConfigurationManager.UpdateFromCliArgs(
@@ -1096,9 +1085,9 @@ module Handlers =
         | None -> Observable.single FableEvent.WaitingForChanges
 
       fableEvents
-      |> Observable.add (fun events ->
+      |> Observable.add(fun events ->
         match events with
-        | FableEvent.Log msg -> Logger.log (msg.EscapeMarkup())
+        | FableEvent.Log msg -> Logger.log(msg.EscapeMarkup())
         | FableEvent.ErrLog msg ->
           Logger.log $"[bold red]{msg.EscapeMarkup()}[/]"
         | FableEvent.WaitingForChanges -> ())
@@ -1110,12 +1099,12 @@ module Handlers =
       | Error err ->
         for err in err do
           match err with
-          | NoPluginFound name -> Logger.log ($"Plugin {name} not found")
+          | NoPluginFound name -> Logger.log($"Plugin {name} not found")
           | EvaluationFailed(ex) ->
-            Logger.log ($"Failed to evaluate plugin", ex = ex)
+            Logger.log($"Failed to evaluate plugin", ex = ex)
           | SessionExists
           | BoundValueMissing -> Logger.log "Failed to load plugins"
-          | AlreadyLoaded name -> Logger.log ($"Plugin {name} already loaded")
+          | AlreadyLoaded name -> Logger.log($"Plugin {name} already loaded")
 
       do! VirtualFileSystem.Mount config
 
@@ -1148,10 +1137,10 @@ module Handlers =
           config.provider,
           config.runConfiguration
         )
-        |> TaskResult.map (fun (deps, map) ->
+        |> TaskResult.map(fun (deps, map) ->
           let map = map.AddResolutions(config.paths).AddEnvResolution(config)
           deps, map)
-        |> TaskResult.defaultValue (
+        |> TaskResult.defaultValue(
           Seq.empty,
           FileSystem
             .GetImportMap()
@@ -1182,9 +1171,9 @@ module Handlers =
       |> Observable.choose (function
         | PerlaFileChange.PerlaConfig -> Some()
         | _ -> None)
-      |> Observable.map (fun _ -> app.StopAsync() |> Async.AwaitTask)
+      |> Observable.map(fun _ -> app.StopAsync() |> Async.AwaitTask)
       |> Observable.switchAsync
-      |> Observable.map (fun _ ->
+      |> Observable.map(fun _ ->
         ConfigurationManager.UpdateFromFile()
         app <- Server.GetServerApp(config, fileChanges, compilerErrors)
         app.StartAsync(cancellationToken) |> Async.AwaitTask)
@@ -1241,26 +1230,22 @@ module Handlers =
     }
 
   let runSearchPackage
-    (
-      options: SearchOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: SearchOptions, cancellationToken: CancellationToken)
+    =
     task {
       do! Dependencies.Search(options.package, options.page)
       return 0
     }
 
   let runShowPackage
-    (
-      options: ShowPackageOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: ShowPackageOptions, cancellationToken: CancellationToken)
+    =
     task {
       do! Dependencies.Show(options.package)
       return 0
     }
 
-  let runAddResolution (options: PathsOptions) =
+  let runAddResolution(options: PathsOptions) =
     let config = ConfigurationManager.CurrentConfig
 
     let importMap =
@@ -1272,7 +1257,7 @@ module Handlers =
       // Either adding or updating will overwrite the existing key in the custom resolution's map
       | AddOrUpdate(bareImport, path) -> config.paths |> Map.add bareImport path
       | Remove(removeImport) ->
-        config.paths |> Map.remove (UMX.tag<BareImport> removeImport)
+        config.paths |> Map.remove(UMX.tag<BareImport> removeImport)
 
     // write updated values to both config and import map to disk
     ConfigurationManager.WriteFieldsToFile(
@@ -1284,10 +1269,8 @@ module Handlers =
     Task.FromResult 0
 
   let runAddPackage
-    (
-      options: AddPackageOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: AddPackageOptions, cancellationToken: CancellationToken)
+    =
     task {
       ConfigurationManager.UpdateFromCliArgs(
         ?runConfig = options.mode,
@@ -1304,7 +1287,7 @@ module Handlers =
 
       let looksLikeCustomResolution =
         package
-        |> Seq.filter (fun c -> c = '/')
+        |> Seq.filter(fun c -> c = '/')
         // This should account for packages like:
         // - @shoelace-style/shoelace/dist/components/button/button.js
         // - lit/directives/join.js
@@ -1325,7 +1308,7 @@ module Handlers =
       Logger.log "Updating Import Map..."
 
       let! map =
-        Logger.spinner (
+        Logger.spinner(
           $"Adding: [bold yellow]{package}{version}[/]",
           Dependencies.Add(
             $"{package}{version}",
@@ -1345,7 +1328,7 @@ module Handlers =
             Dependencies.LocateDependenciesFromMapAndConfig(map, config)
 
           let exceptWithResolution =
-            Seq.filter (fun (value: Dependency) -> value.name <> package)
+            Seq.filter(fun (value: Dependency) -> value.name <> package)
 
           ConfigurationManager.WriteFieldsToFile(
             [
@@ -1381,10 +1364,11 @@ module Handlers =
                 config with
                     devDependencies = [ yield! config.devDependencies; newDep ]
               }
-            | RunConfiguration.Production -> {
-                config with
-                    dependencies = [ yield! config.dependencies; newDep ]
-              }
+            | RunConfiguration.Production ->
+                {
+                  config with
+                      dependencies = [ yield! config.dependencies; newDep ]
+                }
 
           let deps, devDeps =
             Dependencies.LocateDependenciesFromMapAndConfig(map, config)
@@ -1400,18 +1384,16 @@ module Handlers =
 
         return 0
       | Error err, _ ->
-        Logger.log ($"[bold red]{err}[/]", escape = false)
+        Logger.log($"[bold red]{err}[/]", escape = false)
         return 1
     }
 
   let runRemovePackage
-    (
-      options: RemovePackageOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: RemovePackageOptions, cancellationToken: CancellationToken)
+    =
     task {
       let name = options.package
-      Logger.log ($"Removing: [red]{name}[/]", escape = false)
+      Logger.log($"Removing: [red]{name}[/]", escape = false)
       let config = ConfigurationManager.CurrentConfig
 
       let map = FileSystem.GetImportMap().RemoveResolutions(config.paths)
@@ -1423,10 +1405,10 @@ module Handlers =
             {
               config with
                   dependencies =
-                    config.dependencies |> Seq.filter (fun d -> d.name <> name)
+                    config.dependencies |> Seq.filter(fun d -> d.name <> name)
                   devDependencies =
                     config.devDependencies
-                    |> Seq.filter (fun d -> d.name <> name)
+                    |> Seq.filter(fun d -> d.name <> name)
             }
           )
 
@@ -1442,10 +1424,10 @@ module Handlers =
       let packages =
         match config.runConfiguration with
         | RunConfiguration.Production ->
-          dependencies |> Seq.map (fun f -> f.AsVersionedString)
+          dependencies |> Seq.map(fun f -> f.AsVersionedString)
         | RunConfiguration.Development ->
           [ yield! dependencies; yield! devDependencies ]
-          |> Seq.map (fun f -> f.AsVersionedString)
+          |> Seq.map(fun f -> f.AsVersionedString)
 
       match!
         Dependencies.Restore(
@@ -1463,28 +1445,28 @@ module Handlers =
         return 1
     }
 
-  let runListPackages (options: ListPackagesOptions) = task {
+  let runListPackages(options: ListPackagesOptions) = task {
     let config = ConfigurationManager.CurrentConfig
 
     match options.format with
     | ListFormat.HumanReadable ->
-      Logger.log (
+      Logger.log(
         "[bold green]Installed packages[/] [yellow](alias: packageName@version)[/]\n",
         escape = false
       )
 
       let prodTable =
-        dependencyTable (config.dependencies, "Production Dependencies")
+        dependencyTable(config.dependencies, "Production Dependencies")
 
       let devTable =
-        dependencyTable (config.devDependencies, "Development Dependencies")
+        dependencyTable(config.devDependencies, "Development Dependencies")
 
       AnsiConsole.Write(prodTable)
       AnsiConsole.WriteLine()
       AnsiConsole.Write(devTable)
 
     | ListFormat.TextOnly ->
-      let inline aliasDependency (dep: Dependency) =
+      let inline aliasDependency(dep: Dependency) =
         let name =
           match dep.alias with
           | Some alias -> $"{alias}:{dep.name}"
@@ -1508,10 +1490,8 @@ module Handlers =
   }
 
   let runRestoreImportMap
-    (
-      options: RestoreOptions,
-      cancellationToken: CancellationToken
-    ) =
+    (options: RestoreOptions, cancellationToken: CancellationToken)
+    =
     task {
       ConfigurationManager.UpdateFromCliArgs(
         ?runConfig = options.mode,
@@ -1529,12 +1509,12 @@ module Handlers =
           | RunConfiguration.Development -> yield! config.devDependencies
           | RunConfiguration.Production -> ()
         ]
-        |> List.map (fun d -> d.AsVersionedString)
+        |> List.map(fun d -> d.AsVersionedString)
         // deduplicate repeated strings
         |> set
 
       match!
-        Logger.spinner (
+        Logger.spinner(
           "Fetching dependencies...",
           Dependencies.Restore(
             packages,
@@ -1550,7 +1530,7 @@ module Handlers =
 
         return 0
       | Error err ->
-        Logger.log (
+        Logger.log(
           $"[bold red]An error happened restoring the import map:[/]",
           escape = false
         )
@@ -1559,7 +1539,7 @@ module Handlers =
         return 1
     }
 
-  let runDescribePerla (options: DescribeOptions) = task {
+  let runDescribePerla(options: DescribeOptions) = task {
     let {
           properties = props
           current = current
@@ -1585,21 +1565,21 @@ module Handlers =
         | TopLevelProp prop ->
           table.AddRow(
             Text(prop),
-            config[prop] |> Option.defaultValue (Text ""),
+            config[prop] |> Option.defaultValue(Text ""),
             Text(description)
           )
           |> ignore
         | NestedProp props ->
           table.AddRow(
             Text(prop),
-            config[props] |> Option.defaultValue (Text ""),
+            config[props] |> Option.defaultValue(Text ""),
             Text(description)
           )
           |> ignore
         | TripleNestedProp props ->
           table.AddRow(
             Text(prop),
-            config[props] |> Option.defaultValue (Text ""),
+            config[props] |> Option.defaultValue(Text ""),
             Text(description)
           )
           |> ignore
@@ -1618,21 +1598,21 @@ module Handlers =
           table.AddRow(
             Text(prop),
             Text(description),
-            Defaults.PerlaConfig[prop] |> Option.defaultValue (Text "")
+            Defaults.PerlaConfig[prop] |> Option.defaultValue(Text "")
           )
           |> ignore
         | NestedProp props ->
           table.AddRow(
             Text(prop),
             Text(description),
-            Defaults.PerlaConfig[props] |> Option.defaultValue (Text "")
+            Defaults.PerlaConfig[props] |> Option.defaultValue(Text "")
           )
           |> ignore
         | TripleNestedProp props ->
           table.AddRow(
             Text(prop),
             Text(description),
-            Defaults.PerlaConfig[props] |> Option.defaultValue (Text "")
+            Defaults.PerlaConfig[props] |> Option.defaultValue(Text "")
           )
           |> ignore
         | InvalidPropPath ->
@@ -1662,21 +1642,21 @@ module Handlers =
         | TopLevelProp prop ->
           table.AddRow(
             Text(prop),
-            Defaults.PerlaConfig[prop] |> Option.defaultValue (Text ""),
+            Defaults.PerlaConfig[prop] |> Option.defaultValue(Text ""),
             Text(description)
           )
           |> ignore
         | NestedProp props ->
           table.AddRow(
             Text(key),
-            Defaults.PerlaConfig[props] |> Option.defaultValue (Text ""),
+            Defaults.PerlaConfig[props] |> Option.defaultValue(Text ""),
             Text(description)
           )
           |> ignore
         | TripleNestedProp props ->
           table.AddRow(
             Text(key),
-            Defaults.PerlaConfig[props] |> Option.defaultValue (Text ""),
+            Defaults.PerlaConfig[props] |> Option.defaultValue(Text ""),
             Text(description)
           )
           |> ignore

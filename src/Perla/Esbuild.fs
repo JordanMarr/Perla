@@ -26,7 +26,7 @@ type LoaderType =
 module Esbuild =
 
   let addEsExternals (externals: string seq) (args: Builders.ArgumentsBuilder) =
-    externals |> Seq.map (fun ex -> $"--external:{ex}") |> args.Add
+    externals |> Seq.map(fun ex -> $"--external:{ex}") |> args.Add
 
   let addIsBundle (isBundle: bool) (args: Builders.ArgumentsBuilder) =
 
@@ -96,12 +96,12 @@ module Esbuild =
     | Some fragment -> args.Add $"--jsx-fragment={fragment}"
     | None -> args
 
-  let addInlineSourceMaps (args: Builders.ArgumentsBuilder) =
+  let addInlineSourceMaps(args: Builders.ArgumentsBuilder) =
     args.Add "--sourcemap=inline"
 
   let addInjects (injects: string seq) (args: Builders.ArgumentsBuilder) =
 
-    injects |> Seq.map (fun inject -> $"--inject:{inject}") |> args.Add
+    injects |> Seq.map(fun inject -> $"--inject:{inject}") |> args.Add
 
   let addTsconfigRaw
     (tsconfig: string option)
@@ -127,7 +127,7 @@ module Esbuild =
 
     args
 
-  let addKeepNames (args: Builders.ArgumentsBuilder) = args.Add "--keep-names"
+  let addKeepNames(args: Builders.ArgumentsBuilder) = args.Add "--keep-names"
 
 type Esbuild =
 
@@ -152,7 +152,7 @@ type Esbuild =
       .WithStandardOutputPipe(PipeTarget.ToStream(Console.OpenStandardOutput()))
       .WithArguments(fun args ->
         args.Add(entryPoint)
-        |> Esbuild.addEsExternals (defaultArg externals config.externals)
+        |> Esbuild.addEsExternals(defaultArg externals config.externals)
         |> Esbuild.addIsBundle true
         |> Esbuild.addTarget config.ecmaVersion
         |> Esbuild.addDefaultFileLoaders fileLoaders
@@ -204,7 +204,7 @@ type Esbuild =
       .WithStandardOutputPipe(PipeTarget.ToStringBuilder(resultsContainer))
       .WithStandardErrorPipe(
         PipeTarget.ToDelegate(fun msg ->
-          Logger.logCustom (
+          Logger.logCustom(
             $"[bold red]{msg}[/]",
             escape = true,
             prefixes = [ PrefixKind.Log; PrefixKind.Esbuild ]

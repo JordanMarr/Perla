@@ -87,27 +87,21 @@ type PerlaPluginBuilder(name: string) =
 
   [<CustomOperation "should_process_file">]
   member inline _.WithTransformProcess
-    (
-      state: PluginFunctions list,
-      [<InlineIfLambda>] extension: string -> bool
-    ) =
+    (state: PluginFunctions list, [<InlineIfLambda>] extension: string -> bool)
+    =
     PluginFunctions.ShouldProcessFile extension :: state
 
 
   [<CustomOperation "with_transform">]
   member inline _.WithTransform
-    (
-      state: PluginFunctions list,
-      [<InlineIfLambda>] transform: TransformAction
-    ) =
+    (state: PluginFunctions list, [<InlineIfLambda>] transform: TransformAction)
+    =
     PluginFunctions.Transform transform :: state
 
   [<CustomOperation "with_transform">]
   member inline this.WithTransform
-    (
-      state: PluginFunctions list,
-      [<InlineIfLambda>] transform: Transform
-    ) =
+    (state: PluginFunctions list, [<InlineIfLambda>] transform: Transform)
+    =
     let inline op fileTransform =
       transform fileTransform |> ValueTask<FileTransform>
 
@@ -115,10 +109,8 @@ type PerlaPluginBuilder(name: string) =
 
   [<CustomOperation "with_transform">]
   member inline this.WithTransform
-    (
-      state: PluginFunctions list,
-      [<InlineIfLambda>] transform: TransformTask
-    ) =
+    (state: PluginFunctions list, [<InlineIfLambda>] transform: TransformTask)
+    =
     let inline op fileTransform =
       transform fileTransform |> ValueTask<FileTransform>
 
@@ -126,10 +118,8 @@ type PerlaPluginBuilder(name: string) =
 
   [<CustomOperation "with_transform">]
   member inline this.WithTransform
-    (
-      state: PluginFunctions list,
-      [<InlineIfLambda>] transform: TransformAsync
-    ) =
+    (state: PluginFunctions list, [<InlineIfLambda>] transform: TransformAsync)
+    =
     let inline op fileTransform =
       transform fileTransform |> Async.StartAsTask |> ValueTask<FileTransform>
 
@@ -138,7 +128,7 @@ type PerlaPluginBuilder(name: string) =
   member _.Run state =
     let shouldTransform =
       state
-      |> List.tryPick (fun f ->
+      |> List.tryPick(fun f ->
         match f with
         | PluginFunctions.ShouldProcessFile shouldTransform ->
           Some shouldTransform
@@ -149,7 +139,7 @@ type PerlaPluginBuilder(name: string) =
 
     let transform =
       state
-      |> List.tryPick (fun f ->
+      |> List.tryPick(fun f ->
         match f with
         | PluginFunctions.Transform transform -> Some transform
         | _ -> None)

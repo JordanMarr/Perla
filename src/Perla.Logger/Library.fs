@@ -121,22 +121,18 @@ type Logger =
         | PrefixKind.Esbuild -> [ Log; Esbuild ]
         | PrefixKind.Browser -> [ Log; Browser ]
 
-    Logger.logCustom (message, prefixes = target, ?ex = ex, ?escape = escape)
+    Logger.logCustom(message, prefixes = target, ?ex = ex, ?escape = escape)
 
   static member spinner<'Operation>
-    (
-      title: string,
-      task: Task<'Operation>
-    ) : Task<'Operation> =
+    (title: string, task: Task<'Operation>)
+    : Task<'Operation> =
     let status = AnsiConsole.Status()
     status.Spinner <- Spinner.Known.Dots
     status.StartAsync(title, (fun _ -> task))
 
   static member spinner<'Operation>
-    (
-      title: string,
-      task: Async<'Operation>
-    ) : Task<'Operation> =
+    (title: string, task: Async<'Operation>)
+    : Task<'Operation> =
     let status = AnsiConsole.Status()
     status.Spinner <- Spinner.Known.Dots
     status.StartAsync(title, (fun _ -> task |> Async.StartAsTask))
@@ -190,7 +186,7 @@ type Logger =
 
 module Logger =
 
-  let getPerlaLogger () =
+  let getPerlaLogger() =
     { new ILogger with
         member _.Log(logLevel, eventId, state, ex, formatter) =
           let format = formatter.Invoke(state, ex)

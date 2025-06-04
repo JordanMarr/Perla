@@ -21,17 +21,15 @@ open Perla.Handlers
 type PerlaOptions =
 
   static member BoolOption
-    (
-      aliases: string seq,
-      description: string
-    ) : Option<bool option> =
-    let parser (result: ArgumentResult) =
+    (aliases: string seq, description: string)
+    : Option<bool option> =
+    let parser(result: ArgumentResult) =
       let defaultValue = Some true
 
       let withToken =
         result.Tokens
         |> Seq.tryHead
-        |> Option.map (fun value ->
+        |> Option.map(fun value ->
           match value.Value.Trim().ToLowerInvariant() with
           | "true" -> true
           | "false" -> false
@@ -49,7 +47,7 @@ type PerlaOptions =
     )
 
   static member PackageSource: Option<Provider voption> =
-    let parser (result: ArgumentResult) =
+    let parser(result: ArgumentResult) =
       match result.Tokens |> Seq.tryHead with
       | Some token -> Provider.FromString token.Value |> ValueSome
       | None -> ValueNone
@@ -78,7 +76,7 @@ type PerlaOptions =
     opt
 
   static member RunConfiguration: Option<RunConfiguration voption> =
-    let parser (result: ArgumentResult) =
+    let parser(result: ArgumentResult) =
       match result.Tokens |> Seq.tryHead with
       | Some token -> RunConfiguration.FromString token.Value |> ValueSome
       | None -> ValueNone
@@ -96,9 +94,9 @@ type PerlaOptions =
     opt
 
   static member Browsers: Option<Browser array> =
-    let parser (result: ArgumentResult) =
+    let parser(result: ArgumentResult) =
       result.Tokens
-      |> Seq.map (fun token -> token.Value |> Browser.FromString)
+      |> Seq.map(fun token -> token.Value |> Browser.FromString)
       |> Seq.distinct
       |> Seq.toArray
 
@@ -117,7 +115,7 @@ type PerlaOptions =
     opt
 
   static member DisplayMode: Option<ListFormat> =
-    let parser (result: ArgumentResult) =
+    let parser(result: ArgumentResult) =
       match result.Tokens |> Seq.tryHead with
       | Some token ->
         match token.Value with
@@ -142,12 +140,10 @@ type PerlaOptions =
 type PerlaArguments =
 
   static member ArgStringMaybe
-    (
-      name: string,
-      ?description: string
-    ) : Argument<string option> =
-    let parser (result: ArgumentResult) =
-      result.Tokens |> Seq.tryHead |> Option.map (fun value -> value.Value)
+    (name: string, ?description: string)
+    : Argument<string option> =
+    let parser(result: ArgumentResult) =
+      result.Tokens |> Seq.tryHead |> Option.map(fun value -> value.Value)
 
     Argument<string option>(
       name,
@@ -157,9 +153,9 @@ type PerlaArguments =
     )
 
   static member Properties: Argument<string array> =
-    let parser (result: ArgumentResult) =
+    let parser(result: ArgumentResult) =
       result.Tokens
-      |> Seq.map (fun token -> token.Value)
+      |> Seq.map(fun token -> token.Value)
       |> Seq.distinct
       |> Seq.toArray
 
@@ -193,7 +189,7 @@ module DescribeInputs =
       (fun (result: ArgumentResult) ->
         match result.Tokens |> Seq.toArray with
         | [||] -> None
-        | others -> Some(others |> Array.map (fun token -> token.Value))),
+        | others -> Some(others |> Array.map(fun token -> token.Value))),
       Description =
         "A property, properties or json path-like string names to describe",
       Arity = ArgumentArity.ZeroOrMore
@@ -419,7 +415,7 @@ module Commands =
       {
         mode =
           runAsDev
-          |> Option.map (fun runAsDev ->
+          |> Option.map(fun runAsDev ->
             match runAsDev with
             | true -> RunConfiguration.Development
             | false -> RunConfiguration.Production)
@@ -433,7 +429,7 @@ module Commands =
       description "Builds the SPA application for distribution"
       addAlias "b"
 
-      inputs (
+      inputs(
         Input.Context(),
         SharedInputs.asDev,
         BuildInputs.enablePreloads,
@@ -441,7 +437,7 @@ module Commands =
         BuildInputs.preview
       )
 
-      setHandler (buildArgs >> Handlers.runBuild)
+      setHandler(buildArgs >> Handlers.runBuild)
     }
 
   let Serve =
@@ -456,7 +452,7 @@ module Commands =
       {
         mode =
           mode
-          |> Option.map (fun runAsDev ->
+          |> Option.map(fun runAsDev ->
             match runAsDev with
             | true -> RunConfiguration.Development
             | false -> RunConfiguration.Production)
@@ -473,7 +469,7 @@ module Commands =
       description desc
       addAliases [ "s"; "start" ]
 
-      inputs (
+      inputs(
         Input.Context(),
         SharedInputs.asDev,
         ServeInputs.port,
@@ -481,7 +477,7 @@ module Commands =
         ServeInputs.ssl
       )
 
-      setHandler (buildArgs >> Handlers.runServe)
+      setHandler(buildArgs >> Handlers.runServe)
     }
 
   let Setup =
@@ -501,23 +497,20 @@ module Commands =
     command "setup" {
       description "Initialized a given directory or perla itself"
 
-      inputs (
+      inputs(
         Input.Context(),
         SetupInputs.installTemplates,
         SetupInputs.skipPrompts
       )
 
-      setHandler (buildArgs >> Handlers.runSetup)
+      setHandler(buildArgs >> Handlers.runSetup)
     }
 
   let SearchPackage =
 
     let buildArgs
-      (
-        ctx: InvocationContext,
-        package: string,
-        page: int option
-      ) : SearchOptions * CancellationToken =
+      (ctx: InvocationContext, package: string, page: int option)
+      : SearchOptions * CancellationToken =
       {
         package = package
         page = page |> Option.defaultValue 1
@@ -528,9 +521,9 @@ module Commands =
       description
         "Search a package name in the Skypack api, this will bring potential results"
 
-      inputs (Input.Context(), PackageInputs.package, PackageInputs.currentPage)
+      inputs(Input.Context(), PackageInputs.package, PackageInputs.currentPage)
 
-      setHandler (buildArgs >> Handlers.runSearchPackage)
+      setHandler(buildArgs >> Handlers.runSearchPackage)
     }
 
     cmd.IsHidden <- true
@@ -539,18 +532,16 @@ module Commands =
   let ShowPackage =
 
     let buildArgs
-      (
-        ctx: InvocationContext,
-        package: string
-      ) : ShowPackageOptions * CancellationToken =
+      (ctx: InvocationContext, package: string)
+      : ShowPackageOptions * CancellationToken =
       { package = package }, ctx.GetCancellationToken()
 
     let cmd = command "show" {
       description
         "Shows information about a package if the name matches an existing one"
 
-      inputs (Input.Context(), PackageInputs.package)
-      setHandler (buildArgs >> Handlers.runShowPackage)
+      inputs(Input.Context(), PackageInputs.package)
+      setHandler(buildArgs >> Handlers.runShowPackage)
     }
 
     cmd.IsHidden <- true
@@ -559,18 +550,15 @@ module Commands =
   let RemovePackage =
 
     let buildArgs
-      (
-        ctx: InvocationContext,
-        package: string,
-        alias: string option
-      ) : RemovePackageOptions * CancellationToken =
+      (ctx: InvocationContext, package: string, alias: string option)
+      : RemovePackageOptions * CancellationToken =
       { package = package; alias = alias }, ctx.GetCancellationToken()
 
     command "remove" {
       description "removes a package from the "
 
-      inputs (Input.Context(), PackageInputs.package, PackageInputs.alias)
-      setHandler (buildArgs >> Handlers.runRemovePackage)
+      inputs(Input.Context(), PackageInputs.package, PackageInputs.alias)
+      setHandler(buildArgs >> Handlers.runRemovePackage)
     }
 
   let AddPackage =
@@ -590,7 +578,7 @@ module Commands =
         source = source |> Option.ofValueOption
         mode =
           dev
-          |> Option.map (fun dev ->
+          |> Option.map(fun dev ->
             if dev then
               RunConfiguration.Development
             else
@@ -605,7 +593,7 @@ module Commands =
 
       addAlias "install"
 
-      inputs (
+      inputs(
         Input.Context(),
         SharedInputs.source,
         SharedInputs.asDev,
@@ -614,12 +602,12 @@ module Commands =
         PackageInputs.alias
       )
 
-      setHandler (buildArgs >> Handlers.runAddPackage)
+      setHandler(buildArgs >> Handlers.runAddPackage)
     }
 
   let AddResolution =
 
-    let buildArgs (import: string, resolution: string option, remove: bool) =
+    let buildArgs(import: string, resolution: string option, remove: bool) =
       match resolution with
       | Some resolution -> {
           operation = AddOrUpdate(UMX.tag import, UMX.tag resolution)
@@ -636,13 +624,13 @@ module Commands =
       description
         $"Saves a manual resolution in the {Constants.PerlaConfigName} file that will be included in the import map for this application."
 
-      inputs (
+      inputs(
         PackageInputs.import,
         PackageInputs.resolution,
         PackageInputs.removeResolution
       )
 
-      setHandler (buildArgs >> Handlers.runAddResolution)
+      setHandler(buildArgs >> Handlers.runAddResolution)
     }
 
     cmd.AddValidator(fun cmdResult ->
@@ -663,10 +651,10 @@ module Commands =
 
   let ListPackages =
 
-    let buildArgs (asNpm: bool option) : ListPackagesOptions = {
+    let buildArgs(asNpm: bool option) : ListPackagesOptions = {
       format =
         asNpm
-        |> Option.map (fun asNpm ->
+        |> Option.map(fun asNpm ->
           if asNpm then
             ListFormat.TextOnly
           else
@@ -681,7 +669,7 @@ module Commands =
         "Lists the current dependencies in a table or an npm style json string"
 
       inputs PackageInputs.showAsNpm
-      setHandler (buildArgs >> Handlers.runListPackages)
+      setHandler(buildArgs >> Handlers.runListPackages)
     }
 
   let RestoreImportMap =
@@ -704,8 +692,8 @@ module Commands =
       description
         "Restore the import map based on the selected mode, defaults to production"
 
-      inputs (Input.Context(), SharedInputs.source, SharedInputs.mode)
-      setHandler (buildArgs >> Handlers.runRestoreImportMap)
+      inputs(Input.Context(), SharedInputs.source, SharedInputs.mode)
+      setHandler(buildArgs >> Handlers.runRestoreImportMap)
     }
 
   let Template =
@@ -760,7 +748,7 @@ module Commands =
       description
         "Handles Template Repository operations such as list, add, update, and remove templates"
 
-      inputs (
+      inputs(
         Input.Context(),
         TemplateInputs.repositoryName,
         TemplateInputs.addTemplate,
@@ -769,7 +757,7 @@ module Commands =
         TemplateInputs.displayMode
       )
 
-      setHandler (buildArgs >> Handlers.runTemplate)
+      setHandler(buildArgs >> Handlers.runTemplate)
     }
 
     template
@@ -796,14 +784,14 @@ module Commands =
       description
         "Creates a new project based on the selected template if it exists"
 
-      inputs (
+      inputs(
         Input.Context(),
         ProjectInputs.projectName,
         ProjectInputs.byId,
         ProjectInputs.byShortName
       )
 
-      setHandler (buildArgs >> Handlers.runNew)
+      setHandler(buildArgs >> Handlers.runNew)
     }
 
   let Test =
@@ -826,7 +814,7 @@ module Commands =
         watch = watch
         browserMode =
           sequential
-          |> Option.map (fun sequential ->
+          |> Option.map(fun sequential ->
             if sequential then Some BrowserMode.Sequential else None)
           |> Option.flatten
       },
@@ -835,7 +823,7 @@ module Commands =
     let cmd = command "test" {
       description "Runs client side tests in a headless browser"
 
-      inputs (
+      inputs(
         Input.Context(),
         TestingInputs.browsers,
         TestingInputs.files,
@@ -845,7 +833,7 @@ module Commands =
         TestingInputs.sequential
       )
 
-      setHandler (buildArgs >> Handlers.runTesting)
+      setHandler(buildArgs >> Handlers.runTesting)
     }
 
     cmd.IsHidden <- true
@@ -853,7 +841,7 @@ module Commands =
 
   let Describe =
 
-    let buildArgs (properties: string[] option, current: bool) = {
+    let buildArgs(properties: string[] option, current: bool) = {
       properties = properties
       current = current
     }
@@ -864,6 +852,6 @@ module Commands =
       description
         "Describes the perla.json file or it's properties as requested"
 
-      inputs (DescribeInputs.perlaProperties, DescribeInputs.describeCurrent)
-      setHandler (buildArgs >> Handlers.runDescribePerla)
+      inputs(DescribeInputs.perlaProperties, DescribeInputs.describeCurrent)
+      setHandler(buildArgs >> Handlers.runDescribePerla)
     }

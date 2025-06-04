@@ -67,7 +67,7 @@ module Build =
 
 
   [<Fact>]
-  let ``GetIndexFile should add module preload dependencies`` () =
+  let ``GetIndexFile should add module preload dependencies``() =
     use browserCtx = new BrowsingContext()
     let parser = browserCtx.GetService<IHtmlParser>()
     let document = parser.ParseDocument baseIndex

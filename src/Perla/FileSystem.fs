@@ -52,7 +52,7 @@ module FileSystem =
   let AssemblyRoot: string<SystemPath> =
     UMX.tag<SystemPath> AppContext.BaseDirectory
 
-  let CurrentWorkingDirectory () : string<SystemPath> =
+  let CurrentWorkingDirectory() : string<SystemPath> =
     UMX.tag<SystemPath> Environment.CurrentDirectory
 
   let PerlaArtifactsRoot: string<SystemPath> =
@@ -66,7 +66,7 @@ module FileSystem =
   let Templates: string<SystemPath> =
     (UMX.untag PerlaArtifactsRoot) / Constants.TemplatesDirectory |> UMX.tag
 
-  let rec findConfigFile (directory: string, fileName: string) =
+  let rec findConfigFile(directory: string, fileName: string) =
     let config = directory / fileName
 
     if File.Exists config then
@@ -76,7 +76,7 @@ module FileSystem =
         let parent = Path.GetDirectoryName(directory) |> Path.GetFullPath
 
         if parent <> directory then
-          findConfigFile (parent, fileName)
+          findConfigFile(parent, fileName)
         else
           None
       with :? ArgumentNullException ->
@@ -91,8 +91,8 @@ module FileSystem =
       | Some dir -> UMX.untag dir |> Path.GetFullPath |> UMX.tag
       | None -> CurrentWorkingDirectory() |> UMX.untag
 
-    findConfigFile (workDir, UMX.tag fileName)
-    |> Option.defaultValue ((CurrentWorkingDirectory() |> UMX.untag) / fileName)
+    findConfigFile(workDir, UMX.tag fileName)
+    |> Option.defaultValue((CurrentWorkingDirectory() |> UMX.untag) / fileName)
     |> UMX.tag<SystemPath>
 
   let PerlaConfigPath: string<SystemPath> =
@@ -119,7 +119,7 @@ module FileSystem =
     try
       File.WriteAllBytes(UMX.untag path, content |> Json.ToBytes)
     with ex ->
-      Logger.log (
+      Logger.log(
         $"[bold red]Unable to write file at[/][bold yellow]{path}[/]",
         ex = ex,
         escape = false
@@ -165,13 +165,13 @@ module FileSystem =
 
     UMX.tag<SystemPath> targetPath, config
 
-  let RemoveTemplateDirectory (path: string<SystemPath>) =
+  let RemoveTemplateDirectory(path: string<SystemPath>) =
     try
       Directory.Delete(UMX.untag path)
     with ex ->
-      Logger.log ($"There was an error removing: {path}", ex = ex)
+      Logger.log($"There was an error removing: {path}", ex = ex)
 
-  let EsbuildBinaryPath (version: string<Semver> option) : string<SystemPath> =
+  let EsbuildBinaryPath(version: string<Semver> option) : string<SystemPath> =
     let bin = if Env.IsWindows then "" else "bin"
     let exec = if Env.IsWindows then ".exe" else ""
 
@@ -188,7 +188,7 @@ module FileSystem =
     |> Path.GetFullPath
     |> UMX.tag
 
-  let chmodBinCmd (esbuildVersion: string<Semver> option) =
+  let chmodBinCmd(esbuildVersion: string<Semver> option) =
     Cli
       .Wrap("chmod")
       .WithStandardErrorPipe(PipeTarget.ToStream(Console.OpenStandardError()))
@@ -196,10 +196,8 @@ module FileSystem =
       .WithArguments($"+x {EsbuildBinaryPath(esbuildVersion)}")
 
   let tryDownloadEsBuild
-    (
-      esbuildVersion: string,
-      cancellationToken: CancellationToken option
-    ) : Task<string option> =
+    (esbuildVersion: string, cancellationToken: CancellationToken option)
+    : Task<string option> =
     let binString = $"{Env.PlatformString}-{Env.ArchString}"
 
     let compressedFile =
@@ -229,7 +227,7 @@ module FileSystem =
 
         return Some(file.Name)
       with ex ->
-        Logger.log ($"Failed to download esbuild from: {url}", ex)
+        Logger.log($"Failed to download esbuild from: {url}", ex)
         return None
     }
 
@@ -240,14 +238,14 @@ module FileSystem =
     task {
       match! path with
       | Some path ->
-        let extract () =
+        let extract() =
           use stream = new GZipInputStream(File.OpenRead path)
 
           use archive = TarArchive.CreateInputTarArchive(stream, Encoding.UTF8)
 
           path |> Path.GetDirectoryName |> archive.ExtractContents
 
-        extract ()
+        extract()
 
         if Env.IsWindows |> not then
           Logger.log
@@ -267,7 +265,7 @@ module FileSystem =
       return ()
     }
 
-  let TryReadTsConfig () =
+  let TryReadTsConfig() =
     let path = Path.Combine($"{CurrentWorkingDirectory()}", "tsconfig.json")
 
     try
@@ -275,7 +273,7 @@ module FileSystem =
     with _ ->
       None
 
-  let GetTempDir () =
+  let GetTempDir() =
     let tmp = Path.GetTempPath()
     let path = Path.Combine(tmp, Guid.NewGuid().ToString())
     Directory.CreateDirectory(path) |> ignore
@@ -287,14 +285,14 @@ module FileSystem =
     try
       UMX.untag path
       |> Directory.EnumerateDirectories
-      |> Seq.map (Path.GetDirectoryName >> UMX.tag<SystemPath>)
+      |> Seq.map(Path.GetDirectoryName >> UMX.tag<SystemPath>)
     with :? DirectoryNotFoundException ->
       Logger.log
         $"Directories not found at {path}, this might be a bad template or a possible bug"
 
       Seq.empty
 
-  let collectRepositoryFiles (path: string<SystemPath>) =
+  let collectRepositoryFiles(path: string<SystemPath>) =
     let foldFilesAndTemplates (files, templates) (next: FileInfo) =
       if next.FullName.Contains(".tpl.") then
         (files, next :: templates)
@@ -307,24 +305,24 @@ module FileSystem =
     try
       DirectoryInfo(UMX.untag path)
         .EnumerateFiles("*.*", SearchOption.AllDirectories)
-      |> Seq.filter (fun file -> file.Extension <> ".fsx")
+      |> Seq.filter(fun file -> file.Extension <> ".fsx")
       |> Seq.fold
         foldFilesAndTemplates
         (List.empty<FileInfo>, List.empty<FileInfo>)
     with :? DirectoryNotFoundException ->
-      Logger.log (
+      Logger.log(
         "[bold red]While the repository was found, the chosen template was not[/]",
         escape = false
       )
 
-      Logger.log (
+      Logger.log(
         $"Please ensure you chose the correct template and [bold red]{DirectoryInfo(UMX.untag path).Name}[/] exists",
         escape = false
       )
 
       (List.empty, List.empty)
 
-  let getPerlaFilesMonitor () =
+  let getPerlaFilesMonitor() =
     let fsw =
       new FileSystemWatcher(
         UMX.untag PerlaConfigPath |> Path.GetDirectoryName |> Path.GetFullPath,
@@ -366,7 +364,7 @@ module FileSystem =
         return Error $"{ex.Message}\n{err.ToString()}"
     }
 
-  let CheckFableExists (cancellationToken: CancellationToken) : Task<bool> = task {
+  let CheckFableExists(cancellationToken: CancellationToken) : Task<bool> = task {
     let ext = if Env.IsWindows then ".exe" else ""
     let dotnet = $"dotnet{ext}"
 
@@ -415,14 +413,14 @@ type FileSystem =
   static member PluginFiles() =
     let path =
       Path.Combine(
-        UMX.untag (FileSystem.CurrentWorkingDirectory()),
+        UMX.untag(FileSystem.CurrentWorkingDirectory()),
         ".perla",
         "plugins"
       )
 
     !! $"{path}/**/*.fsx"
     |> Seq.toArray
-    |> Array.Parallel.map (fun path -> path, File.ReadAllText(path))
+    |> Array.Parallel.map(fun path -> path, File.ReadAllText(path))
 
 
   static member WriteImportMap(map: ImportMap, ?fromDirectory) =
@@ -440,7 +438,7 @@ type FileSystem =
           config.ToJsonString(DefaultJsonOptions())
         )
       with ex ->
-        Logger.log (
+        Logger.log(
           $"[bold red]Unable to write file at[/][bold yellow]{path}[/]",
           ex = ex,
           escape = false
@@ -451,11 +449,9 @@ type FileSystem =
 
 
   static member ObservePerlaFiles
-    (
-      indexPath: string,
-      [<Optional>] ?cancellationToken: CancellationToken
-    ) =
-    let notifier = FileSystem.getPerlaFilesMonitor ()
+    (indexPath: string, [<Optional>] ?cancellationToken: CancellationToken)
+    =
+    let notifier = FileSystem.getPerlaFilesMonitor()
 
     match cancellationToken with
     | Some cancel ->
@@ -464,12 +460,12 @@ type FileSystem =
 
     [ notifier.Changed :> IObservable<FileSystemEventArgs>; notifier.Created ]
     |> Observable.mergeSeq
-    |> Observable.throttle (TimeSpan.FromMilliseconds(400))
-    |> Observable.filter (fun event ->
+    |> Observable.throttle(TimeSpan.FromMilliseconds(400))
+    |> Observable.filter(fun event ->
       indexPath.ToLowerInvariant().Contains(event.Name)
       || event.Name.Contains(Constants.PerlaConfigName)
       || event.Name.Contains(Constants.ImportMapName))
-    |> Observable.map (fun event ->
+    |> Observable.map(fun event ->
       match event.Name.ToLowerInvariant() with
       | value when value.Contains(Constants.PerlaConfigName) ->
         PerlaFileChange.PerlaConfig
@@ -494,19 +490,19 @@ type FileSystem =
     else
       Logger.log "esbuild is not present, setting esbuild..."
 
-      Logger.spinner (
+      Logger.spinner(
         "esbuild is not present, setting esbuild...",
         fun context ->
           context.Status <- "Downloading esbuild..."
 
-          FileSystem.tryDownloadEsBuild (
+          FileSystem.tryDownloadEsBuild(
             UMX.untag esbuildVersion,
             cancellationToken
           )
           |> (fun path ->
             context.Status <- "Extracting esbuild..."
             path)
-          |> FileSystem.decompressEsbuild (Some esbuildVersion)
+          |> FileSystem.decompressEsbuild(Some esbuildVersion)
           |> (fun path ->
             context.Status <- "Cleaning up extra files..."
             path)
@@ -514,35 +510,32 @@ type FileSystem =
 
 
   static member WriteTplRepositoryToDisk
-    (
-      origin: string<SystemPath>,
-      target: string<UserPath>,
-      ?payload: obj
-    ) =
+    (origin: string<SystemPath>, target: string<UserPath>, ?payload: obj)
+    =
     let originDirectory = UMX.cast origin |> Path.GetFullPath
     let targetDirectory = UMX.cast target |> Path.GetFullPath
 
     let files, templates = FileSystem.collectRepositoryFiles origin
 
 
-    let copyFiles (ctx: ProgressTask) =
+    let copyFiles(ctx: ProgressTask) =
       files
       |> Array.ofList
-      |> Array.Parallel.iter (fun file ->
+      |> Array.Parallel.iter(fun file ->
         file.Directory.Create()
         let target = file.FullName.Replace(originDirectory, targetDirectory)
         Directory.CreateDirectory(Path.GetDirectoryName target) |> ignore
         file.CopyTo(target, true) |> ignore
         ctx.Increment(1.))
 
-    let copyTemplates (ctx: ProgressTask) =
+    let copyTemplates(ctx: ProgressTask) =
       let compileFiles (payload: obj option) (file: string) =
         let tpl = Scriban.Template.Parse(file)
         tpl.Render(payload |> Option.toObj)
 
       templates
       |> Array.ofList
-      |> Array.Parallel.iter (fun file ->
+      |> Array.Parallel.iter(fun file ->
         file.Directory.Create()
 
         let target =

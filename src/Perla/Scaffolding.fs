@@ -170,7 +170,7 @@ module Scaffolding =
        repo.EnsureIndex(fun template -> template.shortName) |> ignore
        repo)
 
-  let downloadAndExtract (user: string, repository: string, branch: string) = task {
+  let downloadAndExtract(user: string, repository: string, branch: string) = task {
     let! url =
       http {
         GET
@@ -191,7 +191,7 @@ module Scaffolding =
     parentId
     =
     templateItems
-    |> Seq.map (fun templateItem -> {
+    |> Seq.map(fun templateItem -> {
       _id = ObjectId.NewObjectId()
       parent = parentId
       name = templateItem.name
@@ -206,9 +206,9 @@ module Scaffolding =
         |> UMX.tag
     })
 
-  let buildTemplateConfigurationItems (templates: TemplateItem seq) =
+  let buildTemplateConfigurationItems(templates: TemplateItem seq) =
     templates
-    |> Seq.map (fun item -> {
+    |> Seq.map(fun item -> {
       childId = item._id
       name = item.name
       shortName = item.shortName
@@ -216,7 +216,7 @@ module Scaffolding =
         item.description |> Option.defaultValue "No Description Provided"
     })
 
-  let readTemplateScriptContents (path: string) =
+  let readTemplateScriptContents(path: string) =
     try
       System.IO.File.ReadAllText(
         System.IO.Path.Combine(path, Constants.TemplatingScriptName)
@@ -270,7 +270,7 @@ module Scaffolding =
       TemplatesCol.Value.FindAll() |> Seq.toList
 
     static member Add(user, repository, branch) = taskResult {
-      let! result = downloadAndExtract (user, repository, branch)
+      let! result = downloadAndExtract(user, repository, branch)
       let path, config = result
       let! config = config
       let id = ObjectId.NewObjectId()
@@ -366,8 +366,8 @@ module Scaffolding =
         | QuickAccessSearch.Id id ->
           templatesCol.FindById(id)
           |> Option.ofNull
-          |> Option.map (fun tpl -> [| tpl |])
-          |> Option.defaultWith (fun _ -> Array.empty)
+          |> Option.map(fun tpl -> [| tpl |])
+          |> Option.defaultWith(fun _ -> Array.empty)
 
         | QuickAccessSearch.Name name ->
           templatesCol
@@ -417,7 +417,7 @@ module Scaffolding =
 
         try
           let! path =
-            downloadAndExtract (
+            downloadAndExtract(
               updated.username,
               updated.repository,
               updated.branch
@@ -470,7 +470,7 @@ module Scaffolding =
 
           return updated
         with ex ->
-          Logger.Logger.log ("We could not update the template", ex = ex)
+          Logger.Logger.log("We could not update the template", ex = ex)
           Database.Value.Rollback() |> ignore
           return false
       | None -> return false

@@ -38,7 +38,7 @@ let ArchString =
 [<Literal>]
 let PerlaEnvPrefix = "PERLA_"
 
-let internal getPerlaEnvVars () =
+let internal getPerlaEnvVars() =
   let env = Environment.GetEnvironmentVariables()
 
   [
@@ -51,8 +51,8 @@ let internal getPerlaEnvVars () =
         (key.Replace(PerlaEnvPrefix, String.Empty), value)
   ]
 
-let GetEnvContent () = option {
-  let env = getPerlaEnvVars ()
+let GetEnvContent() = option {
+  let env = getPerlaEnvVars()
   let sb = StringBuilder()
 
   for key, value in env do
@@ -92,12 +92,12 @@ let (|PerlaPrefixed|_|) line =
 let (|NotPerlaPrefixed|_|) line =
 
   match getGroups envVarRegex line with
-  | [ _; key; value ] when not (key.StartsWith(PerlaEnvPrefix)) ->
+  | [ _; key; value ] when not(key.StartsWith(PerlaEnvPrefix)) ->
     ValueSome(key, value)
   | _ -> ValueNone
 
-let LoadEnvFiles (files: string<SystemPath> seq) =
-  let readLinesFromFile (file: string<SystemPath>) =
+let LoadEnvFiles(files: string<SystemPath> seq) =
+  let readLinesFromFile(file: string<SystemPath>) =
     let file = UMX.untag file
 
     Logger.log $"Loading Environment variables from '{Path.GetFileName file}'"

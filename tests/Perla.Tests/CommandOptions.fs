@@ -27,12 +27,12 @@ module Extensions =
 
 module CommandOptions =
 
-  let ParseRootCommand (handler: Command, command: string) : ParseResult =
+  let ParseRootCommand(handler: Command, command: string) : ParseResult =
     let root = RootCommand()
     root.AddCommand(handler)
     root.Parse(command)
 
-  let ParseInput (input: HandlerInput<'T>, token: string) : ParseResult =
+  let ParseInput(input: HandlerInput<'T>, token: string) : ParseResult =
     match input.Source with
     | ParsedOption o ->
       let option = o :?> Option<'T>
@@ -46,7 +46,7 @@ module CommandOptions =
     open Perla.Handlers
 
     [<Fact>]
-    let ``SharedInputs.source can parse it's sources`` () =
+    let ``SharedInputs.source can parse it's sources``() =
       let jspm = ParseInput(SharedInputs.source, "-s jspm")
       let skypack = ParseInput(SharedInputs.source, "--source skypack")
       let unpkg = ParseInput(SharedInputs.source, "--source unpkg")
@@ -75,7 +75,7 @@ module CommandOptions =
       Assert.Equal(Provider.JspmSystem, jspmSystem1.Value)
 
     [<Fact>]
-    let ``SharedInputs.mode can parse it's sources`` () =
+    let ``SharedInputs.mode can parse it's sources``() =
       let dev = ParseInput(SharedInputs.mode, "-m dev")
       let dev1 = ParseInput(SharedInputs.mode, "--mode development")
       let prod = ParseInput(SharedInputs.mode, "-m prod")
@@ -93,7 +93,7 @@ module CommandOptions =
       Assert.Equal(RunConfiguration.Production, prod1.Value)
 
     [<Fact>]
-    let ``TestingInputs.browsers can parse it's browsers`` () =
+    let ``TestingInputs.browsers can parse it's browsers``() =
       let chromium = ParseInput(TestingInputs.browsers, "-b chromium")
       let firefox = ParseInput(TestingInputs.browsers, "--browsers firefox")
       let webkit = ParseInput(TestingInputs.browsers, "-b webkit")
@@ -131,7 +131,7 @@ module CommandOptions =
         )
 
     [<Fact>]
-    let ``TemplateInputs.displayMode`` () =
+    let ``TemplateInputs.displayMode``() =
       let table = ParseInput(TemplateInputs.displayMode, "--list table")
       let text = ParseInput(TemplateInputs.displayMode, "-ls text")
       let other = ParseInput(TemplateInputs.displayMode, "-ls other")
@@ -152,7 +152,7 @@ module CommandOptions =
       Assert.Equal(ListFormat.TextOnly, text)
 
   [<Fact>]
-  let ``Commands.Setup can parse options`` () =
+  let ``Commands.Setup can parse options``() =
     let result = ParseRootCommand(Commands.Setup, "setup -y -t false")
 
     let installTemplates: bool option =
@@ -165,7 +165,7 @@ module CommandOptions =
     Assert.False(installTemplates.Value)
 
   [<Fact>]
-  let ``Parse Commands.Setup without options should not fail`` () =
+  let ``Parse Commands.Setup without options should not fail``() =
     let result = ParseRootCommand(Commands.Setup, "setup")
 
     let installTemplates: bool option =
@@ -178,7 +178,7 @@ module CommandOptions =
     Assert.True(installTemplates |> Option.isNone)
 
   [<Fact>]
-  let ``Commands.Build can parse options`` () =
+  let ``Commands.Build can parse options``() =
     let result =
       ParseRootCommand(
         Commands.Build,
@@ -202,7 +202,7 @@ module CommandOptions =
     Assert.False(preview.Value)
 
   [<Fact>]
-  let ``Commands.Build doesn't need all of the options`` () =
+  let ``Commands.Build doesn't need all of the options``() =
     let result = ParseRootCommand(Commands.Build, "build")
 
 
@@ -223,7 +223,7 @@ module CommandOptions =
     Assert.True(preview.IsNone)
 
   [<Fact>]
-  let ``Commands.Serve can parse options`` () =
+  let ``Commands.Serve can parse options``() =
     let expectedPort = 3400
     let expectedHost = "0.0.0.0"
 
@@ -245,7 +245,7 @@ module CommandOptions =
     Assert.False(ssl.Value)
 
   [<Fact>]
-  let ``Commands.Serve requires no options`` () =
+  let ``Commands.Serve requires no options``() =
     let result = ParseRootCommand(Commands.Serve, "serve")
 
     let asDev: bool option = SharedInputs.asDev.GetValue result
@@ -260,7 +260,7 @@ module CommandOptions =
     Assert.True(ssl.IsNone)
 
   [<Fact>]
-  let ``Commands.SearchPackage requires package name`` () =
+  let ``Commands.SearchPackage requires package name``() =
     let result = ParseRootCommand(Commands.SearchPackage, "search")
 
     let error = Assert.Single(result.Errors)
@@ -271,7 +271,7 @@ module CommandOptions =
     )
 
   [<Fact>]
-  let ``Commands.SearchPackage can parse the page value`` () =
+  let ``Commands.SearchPackage can parse the page value``() =
     let expectedPage = 2
     let expectedPackage = "lodash"
 
@@ -289,7 +289,7 @@ module CommandOptions =
     Assert.Equal(expectedPage, page.Value)
 
   [<Fact>]
-  let ``Commands.ShowPackage requires package name`` () =
+  let ``Commands.ShowPackage requires package name``() =
     let result = ParseRootCommand(Commands.ShowPackage, "show")
 
     let error = Assert.Single(result.Errors)
@@ -300,7 +300,7 @@ module CommandOptions =
     )
 
   [<Fact>]
-  let ``Commands.RemovePackage can parse an alias`` () =
+  let ``Commands.RemovePackage can parse an alias``() =
     let expectedAlias = "lodash-3"
     let expectedPackage = "lodash@3"
 
@@ -318,7 +318,7 @@ module CommandOptions =
     Assert.Equal(expectedAlias, alias.Value)
 
   [<Fact>]
-  let ``Commands.AddPackage can parse options`` () =
+  let ``Commands.AddPackage can parse options``() =
     let expectedSource = Provider.Unpkg
     let expectedPackage = "lodash"
     let expectedAlias = "lodash-3"
@@ -349,11 +349,8 @@ module CommandOptions =
                "perla.templates.vanilla.js",
                "perla.templates.vanilla.js")>]
   let ``Commands.NewProject can parse group id options``
-    (
-      option: string,
-      name: string,
-      expectedGroupId: string
-    ) =
+    (option: string, name: string, expectedGroupId: string)
+    =
     let result =
       ParseRootCommand(
         Commands.NewProject,
@@ -369,11 +366,8 @@ module CommandOptions =
   [<InlineData("-t", "ff", "ff")>]
   [<InlineData("--template", "ff", "ff")>]
   let ``Commands.NewProject can parse shortname options``
-    (
-      option: string,
-      name: string,
-      expectedShortName: string
-    ) =
+    (option: string, name: string, expectedShortName: string)
+    =
     let result =
       ParseRootCommand(
         Commands.NewProject,

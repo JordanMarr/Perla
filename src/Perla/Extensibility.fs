@@ -41,16 +41,16 @@ module PluginLoader =
 
       do!
         'Fs.PluginFiles()
-        |> Array.Parallel.map (fun (path, content) ->
+        |> Array.Parallel.map(fun (path, content) ->
           PluginRegistry.LoadFromText<ExtCache, PluginStdio>(path, content))
         |> List.ofArray
-        |> List.traverseResultA (fun plugin -> result {
+        |> List.traverseResultA(fun plugin -> result {
           let! plugin = plugin
           Console.WriteLine $"Loaded plugin: {plugin.name}"
 
           do!
             ExtCache.PluginCache.Value.TryAdd(plugin.name, plugin)
-            |> Result.requireTrue (AlreadyLoaded plugin.name)
+            |> Result.requireTrue(AlreadyLoaded plugin.name)
 
           return plugin
         })

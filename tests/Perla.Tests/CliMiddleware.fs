@@ -39,12 +39,10 @@ module private MiddlewareUtils =
           flags.isBinPresent
 
         member _.RunSetupEsbuild
-          (
-            arg1: FSharp.UMX.string<Units.Semver>,
-            arg2: CancellationToken
-          ) : Task<unit> =
+          (arg1: FSharp.UMX.string<Units.Semver>, arg2: CancellationToken)
+          : Task<unit> =
           if flags.throwInSetup then
-            raise (exn "Error in setup")
+            raise(exn "Error in setup")
           else
             Task.FromResult(())
 
@@ -83,12 +81,10 @@ module private MiddlewareUtils =
     =
     { new Templates with
         member _.RunSetupTemplates
-          (
-            arg1: Handlers.TemplateRepositoryOptions,
-            arg2: CancellationToken
-          ) : Task<int> =
+          (arg1: Handlers.TemplateRepositoryOptions, arg2: CancellationToken)
+          : Task<int> =
           if flags.throwInSetup then
-            raise (exn "Error in setup")
+            raise(exn "Error in setup")
           else
             Task.FromResult(flags.exitCode)
 
@@ -124,14 +120,14 @@ module private MiddlewareUtils =
 module CliMiddleware =
 
   [<Fact>]
-  let ``PerlaCliMiddleware.ShouldRunFor can run for command in list`` () =
+  let ``PerlaCliMiddleware.ShouldRunFor can run for command in list``() =
     let candidate = "new"
     let commands = [ "new"; "build" ]
     let result = ShouldRunFor candidate commands
     Result.isOk result |> Assert.True
 
   [<Fact>]
-  let ``PerlaCliMiddleware.ShouldRunFor fails with "Continue"`` () =
+  let ``PerlaCliMiddleware.ShouldRunFor fails with "Continue"``() =
     let candidate = "serve"
     let commands = [ "new"; "build" ]
     let result = ShouldRunFor candidate commands
@@ -139,11 +135,11 @@ module CliMiddleware =
     Result.isError result |> Assert.True
 
     result
-    |> Result.teeError (fun err ->
+    |> Result.teeError(fun err ->
       Assert.Equal(Middleware.PerlaMdResult.Continue, err))
 
   [<Fact>]
-  let ``PerlaCliMiddleware.HasDirective can find directive`` () =
+  let ``PerlaCliMiddleware.HasDirective can find directive``() =
     let directive = Constants.CliDirectives.Preview
 
     let hasDirective: KeyValuePair<string, string seq> seq = [
@@ -166,12 +162,12 @@ module CliMiddleware =
         Command("in-preview", "This command is in preview", IsHidden = true)
 
       let directives: KeyValuePair<string, string seq> seq = []
-      let! result = previewCheck (command, directives)
+      let! result = previewCheck(command, directives)
 
 
       result
-      |> Result.tee (fun _ -> Assert.Fail "Result should not be Ok")
-      |> Result.teeError (fun err -> Assert.Equal((Middleware.Exit 1), err))
+      |> Result.tee(fun _ -> Assert.Fail "Result should not be Ok")
+      |> Result.teeError(fun err -> Assert.Equal((Middleware.Exit 1), err))
       |> ignore
 
       return ()
@@ -189,10 +185,10 @@ module CliMiddleware =
         KeyValuePair(Constants.CliDirectives.Preview, [])
       ]
 
-      let! result = previewCheck (command, directives)
+      let! result = previewCheck(command, directives)
 
       result
-      |> Result.teeError (fun err ->
+      |> Result.teeError(fun err ->
         Assert.Fail $"Result should not be Error: %A{err}")
       |> ignore
 
@@ -200,26 +196,22 @@ module CliMiddleware =
     }
 
   [<Fact>]
-  let ``MiddlewareImpl.previewCheck continues if command is not in preview``
-    ()
-    =
-    task {
-      let command =
-        Command("in-preview", "This command is in preview", IsHidden = false)
+  let ``MiddlewareImpl.previewCheck continues if command is not in preview``() = task {
+    let command =
+      Command("in-preview", "This command is in preview", IsHidden = false)
 
-      let directives: KeyValuePair<string, string seq> seq = []
+    let directives: KeyValuePair<string, string seq> seq = []
 
-      let! result = previewCheck (command, directives)
+    let! result = previewCheck(command, directives)
 
-      match result with
-      | Ok() -> ()
-      | Error(Middleware.Exit _) ->
-        Assert.Fail "The result should not be an exit"
-      | Error Middleware.Continue ->
-        Assert.Fail "Result should not be a continuation"
+    match result with
+    | Ok() -> ()
+    | Error(Middleware.Exit _) -> Assert.Fail "The result should not be an exit"
+    | Error Middleware.Continue ->
+      Assert.Fail "Result should not be a continuation"
 
-      return ()
-    }
+    return ()
+  }
 
   [<Fact>]
   let ``MiddlewareImpl.esbuildPluginCheck stops if plugin is not present and directive is not present``
@@ -279,7 +271,7 @@ module CliMiddleware =
     }
 
   [<Fact>]
-  let ``MiddlewareImpl.setupCheck continues if setup check is present`` () = task {
+  let ``MiddlewareImpl.setupCheck continues if setup check is present``() = task {
     let command = Command("build", "This command requires setup")
     let token = CancellationToken.None
     let directives: KeyValuePair<string, string seq> seq = []
@@ -303,7 +295,7 @@ module CliMiddleware =
 
 
   [<Fact>]
-  let ``MiddlewareImpl.setupCheck stops if setup check is not present`` () = task {
+  let ``MiddlewareImpl.setupCheck stops if setup check is not present``() = task {
     let command = Command("build", "This command requires setup")
     let token = CancellationToken.None
     let directives: KeyValuePair<string, string seq> seq = []
@@ -327,7 +319,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.setupCheck exits with handler's exit code`` () = task {
+  let ``MiddlewareImpl.setupCheck exits with handler's exit code``() = task {
     let command = Command("build", "This command requires setup")
     let token = CancellationToken.None
     let directives: KeyValuePair<string, string seq> seq = []
@@ -352,64 +344,58 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.esbuildBinCheck continues if esbuild bin is present``
-    ()
-    =
-    task {
-      let esbuild =
-        MiddlewareUtils.getEsbuildEnv {|
-          absentInConfig = false
-          savedInDB = true
-          isBinPresent = true
-          throwInSetup = false
-        |}
+  let ``MiddlewareImpl.esbuildBinCheck continues if esbuild bin is present``() = task {
+    let esbuild =
+      MiddlewareUtils.getEsbuildEnv {|
+        absentInConfig = false
+        savedInDB = true
+        isBinPresent = true
+        throwInSetup = false
+      |}
 
-      let command = Command("build", "This command requires esbuild")
-      let directives: KeyValuePair<string, string seq> seq = []
-      let token = CancellationToken.None
+    let command = Command("build", "This command requires esbuild")
+    let directives: KeyValuePair<string, string seq> seq = []
+    let token = CancellationToken.None
 
-      let! result = esbuildBinCheck esbuild (command, directives, token)
+    let! result = esbuildBinCheck esbuild (command, directives, token)
 
-      match result with
-      | Ok() -> ()
-      | Error(Middleware.Exit _) -> Assert.Fail "Result should not be an exit"
-      | Error Middleware.Continue ->
-        Assert.Fail "Result should not be a continuation"
+    match result with
+    | Ok() -> ()
+    | Error(Middleware.Exit _) -> Assert.Fail "Result should not be an exit"
+    | Error Middleware.Continue ->
+      Assert.Fail "Result should not be a continuation"
 
-      return ()
-    }
+    return ()
+  }
 
 
   [<Fact>]
-  let ``MiddlewareImpl.esbuildBinCheck stops if esbuild bin is not present``
-    ()
-    =
-    task {
-      let esbuild =
-        MiddlewareUtils.getEsbuildEnv {|
-          isBinPresent = false
-          throwInSetup = false
-          absentInConfig = false
-          savedInDB = true
-        |}
+  let ``MiddlewareImpl.esbuildBinCheck stops if esbuild bin is not present``() = task {
+    let esbuild =
+      MiddlewareUtils.getEsbuildEnv {|
+        isBinPresent = false
+        throwInSetup = false
+        absentInConfig = false
+        savedInDB = true
+      |}
 
-      let command = Command("build", "This command requires esbuild")
-      let directives: KeyValuePair<string, string seq> seq = []
-      let token = CancellationToken.None
+    let command = Command("build", "This command requires esbuild")
+    let directives: KeyValuePair<string, string seq> seq = []
+    let token = CancellationToken.None
 
-      let! result = esbuildBinCheck esbuild (command, directives, token)
+    let! result = esbuildBinCheck esbuild (command, directives, token)
 
-      match result with
-      | Ok() -> ()
-      | Error(Middleware.Exit _) -> Assert.Fail "Result should not be an exit"
-      | Error Middleware.Continue ->
-        Assert.Fail "Result should not be a continuation"
+    match result with
+    | Ok() -> ()
+    | Error(Middleware.Exit _) -> Assert.Fail "Result should not be an exit"
+    | Error Middleware.Continue ->
+      Assert.Fail "Result should not be a continuation"
 
-      return ()
-    }
+    return ()
+  }
 
   [<Fact>]
-  let ``MiddlewareImpl.esbuildBinCheck exits if setup fails`` () = task {
+  let ``MiddlewareImpl.esbuildBinCheck exits if setup fails``() = task {
     let esbuild =
       MiddlewareUtils.getEsbuildEnv {|
         isBinPresent = false
@@ -434,7 +420,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.esbuildBinCheck continues if check save fails`` () = task {
+  let ``MiddlewareImpl.esbuildBinCheck continues if check save fails``() = task {
     let esbuild =
       MiddlewareUtils.getEsbuildEnv {|
         isBinPresent = false
@@ -458,7 +444,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.templatesCheck continues if templates are present`` () = task {
+  let ``MiddlewareImpl.templatesCheck continues if templates are present``() = task {
     let templates =
       MiddlewareUtils.getTemplatesEnv {|
         exitCode = 0
@@ -479,7 +465,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.templatesCheck stops if templates are not present`` () = task {
+  let ``MiddlewareImpl.templatesCheck stops if templates are not present``() = task {
     let templates =
       MiddlewareUtils.getTemplatesEnv {|
         exitCode = 0
@@ -503,7 +489,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.templatesCheck exits with handler's exit code`` () = task {
+  let ``MiddlewareImpl.templatesCheck exits with handler's exit code``() = task {
     let expectedExit = 100
 
     let templates =
@@ -529,7 +515,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.fableCheck stops if fable is not present`` () = task {
+  let ``MiddlewareImpl.fableCheck stops if fable is not present``() = task {
     let fable =
       MiddlewareUtils.getFableEnv {|
         isFableInConfig = true
@@ -552,7 +538,7 @@ module CliMiddleware =
   }
 
   [<Fact>]
-  let ``MiddlewareImpl.fableCheck continues if fable is present`` () = task {
+  let ``MiddlewareImpl.fableCheck continues if fable is present``() = task {
     let fable =
       MiddlewareUtils.getFableEnv {|
         isFableInConfig = true

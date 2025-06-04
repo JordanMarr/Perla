@@ -14,7 +14,7 @@ module private ImportMap =
     (import: string<BareImport>)
     (_: string<ResolutionUrl>)
     =
-    current |> Map.remove (UMX.untag import)
+    current |> Map.remove(UMX.untag import)
 
   let private AddResolutionsToMap
     (current: Map<string, string>)
@@ -28,7 +28,7 @@ module private ImportMap =
     | Add of Map<string<BareImport>, string<ResolutionUrl>>
     | Remove of Map<string<BareImport>, string<ResolutionUrl>>
 
-  let ModifyMap (map: ImportMap, operation: MapUpdate) =
+  let ModifyMap(map: ImportMap, operation: MapUpdate) =
     let imports =
       match operation with
       | MapUpdate.Add resolutions ->
@@ -76,7 +76,7 @@ module Lib =
       ValueSome(Provider.Unpkg, name, $"{version}{preview}")
     | _ -> ValueNone
 
-  let parseFullRepositoryName (value: string option) = voption {
+  let parseFullRepositoryName(value: string option) = voption {
     let! name = value
     let regex = Regex(@"^([-_\w\d]+)\/([-_\w\d]+):?([\w\d-_]+)?$")
 
@@ -89,16 +89,16 @@ module Lib =
       | _ -> ValueNone
   }
 
-  let getTemplateAndChild (templateName: string) =
+  let getTemplateAndChild(templateName: string) =
     match
-      templateName.Split("/") |> Array.filter (String.IsNullOrWhiteSpace >> not)
+      templateName.Split("/") |> Array.filter(String.IsNullOrWhiteSpace >> not)
     with
     | [| user; template; child |] -> Some user, template, Some child
     | [| template; child |] -> None, template, Some child
     | [| template |] -> None, template, None
     | _ -> None, templateName, None
 
-  let dependencyTable (deps: Dependency seq, title: string) =
+  let dependencyTable(deps: Dependency seq, title: string) =
     let table = Table().AddColumns([| "Name"; "Version"; "Alias" |])
 
     table.Title <- TableTitle(title)
@@ -116,13 +116,13 @@ module Lib =
 
     table
 
-  let (|ScopedPackage|Package|) (package: string) =
+  let (|ScopedPackage|Package|)(package: string) =
     if package.StartsWith("@") then
       ScopedPackage(package.Substring(1))
     else
       Package package
 
-  let parsePackageName (name: string) =
+  let parsePackageName(name: string) =
 
     let getVersion parts =
 
@@ -196,7 +196,7 @@ module Lib =
         | "extension" -> UMX.untag this.extension |> Text :> IRenderable |> Some
         | "sourcemaps" -> $"{this.sourceMaps}" |> Text :> IRenderable |> Some
         | "outdir" ->
-          this.outDir |> Option.map (fun v -> Text($"{v}") :> IRenderable)
+          this.outDir |> Option.map(fun v -> Text($"{v}") :> IRenderable)
         | _ -> None
 
     member this.ToTree() =
@@ -232,7 +232,7 @@ module Lib =
         | _ -> None
 
     member this.ToTree() =
-      let proxy = this["proxy"] |> Option.defaultValue (Text "")
+      let proxy = this["proxy"] |> Option.defaultValue(Text "")
       let tree = Tree("devServer")
 
       tree.AddNodes(
@@ -282,9 +282,9 @@ module Lib =
         | _ -> None
 
     member this.ToTree() =
-      let injects = this["injects"] |> Option.defaultValue (Text "")
-      let externals = this["externals"] |> Option.defaultValue (Text "")
-      let fileLoaders = this["fileloaders"] |> Option.defaultValue (Text "")
+      let injects = this["injects"] |> Option.defaultValue(Text "")
+      let externals = this["externals"] |> Option.defaultValue(Text "")
+      let fileLoaders = this["fileloaders"] |> Option.defaultValue(Text "")
       let tree = Tree("esbuild")
 
       tree.AddNodes(
@@ -322,8 +322,8 @@ module Lib =
         | _ -> None
 
     member this.ToTree() =
-      let includes = this["includes"] |> Option.defaultValue (Text "")
-      let excludes = this["excludes"] |> Option.defaultValue (Text "")
+      let includes = this["includes"] |> Option.defaultValue(Text "")
+      let excludes = this["excludes"] |> Option.defaultValue(Text "")
       let tree = Tree("build")
 
       tree.AddNode(includes).AddNode(excludes) |> ignore
@@ -361,7 +361,7 @@ module Lib =
         | "watch" -> $"{this.watch}" |> Text :> IRenderable |> Some
         | "headless" -> $"{this.headless}" |> Text :> IRenderable |> Some
         | "fable" ->
-          this.fable |> Option.map (fun value -> value.ToTree() :> IRenderable)
+          this.fable |> Option.map(fun value -> value.ToTree() :> IRenderable)
         | _ -> None
 
     member this.Item
@@ -370,14 +370,14 @@ module Lib =
 
         match prop.ToLowerInvariant() with
         | "fable" ->
-          this.fable |> Option.map (fun fable -> fable[node]) |> Option.flatten
+          this.fable |> Option.map(fun fable -> fable[node]) |> Option.flatten
         | _ -> None
 
     member this.ToTree() =
       let tree = Tree("testing")
-      let browsers = this["browsers"] |> Option.defaultValue (Text "")
-      let includes = this["includes"] |> Option.defaultValue (Text "")
-      let excludes = this["excludes"] |> Option.defaultValue (Text "")
+      let browsers = this["browsers"] |> Option.defaultValue(Text "")
+      let includes = this["includes"] |> Option.defaultValue(Text "")
+      let excludes = this["excludes"] |> Option.defaultValue(Text "")
 
       tree.AddNodes(browsers, includes, excludes)
 
@@ -407,7 +407,7 @@ module Lib =
         | "build" -> this.build.ToTree() :> IRenderable |> Some
         | "devserver" -> this.devServer.ToTree() :> IRenderable |> Some
         | "fable" ->
-          this.fable |> Option.map (fun fable -> fable.ToTree() :> IRenderable)
+          this.fable |> Option.map(fun fable -> fable.ToTree() :> IRenderable)
         | "esbuild" -> this.esbuild.ToTree() :> IRenderable |> Some
         | "testing" -> this.testing.ToTree() :> IRenderable |> Some
         | "mountdirectories" ->
@@ -442,7 +442,7 @@ module Lib =
 
         match prop.ToLowerInvariant() with
         | "fable" ->
-          this.fable |> Option.map (fun fable -> fable[node]) |> Option.flatten
+          this.fable |> Option.map(fun fable -> fable[node]) |> Option.flatten
         | "devservr" -> this.devServer[node]
         | "build" -> this.build[node]
         | "esbuild" -> this.esbuild[node]

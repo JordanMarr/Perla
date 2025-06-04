@@ -86,7 +86,7 @@ module Middleware =
       (directive: string)
       (directives: KeyValuePair<string, string seq> seq)
       : bool =
-      let comparison (current: KeyValuePair<string, string seq>) =
+      let comparison(current: KeyValuePair<string, string seq>) =
         current.Key.Equals(
           directive,
           StringComparison.InvariantCultureIgnoreCase
@@ -94,9 +94,7 @@ module Middleware =
 
       Seq.exists comparison directives
 
-    let ToSCLMiddleware
-      (middleware: PerlaCliMiddleware)
-      : InvocationMiddleware =
+    let ToSCLMiddleware(middleware: PerlaCliMiddleware) : InvocationMiddleware =
       InvocationMiddleware(fun context next -> task {
         let command = context.ParseResult.CommandResult.Command
         let directives = context.ParseResult.Directives
@@ -105,9 +103,9 @@ module Middleware =
         let! result =
           match middleware with
           | PerlaCliMiddleware.AsMiddleware middleware ->
-            middleware (command, directives)
+            middleware(command, directives)
           | PerlaCliMiddleware.AsCancellableMiddleware middleware ->
-            middleware (command, directives, cancellationToken)
+            middleware(command, directives, cancellationToken)
 
         match result with
         | Ok()
@@ -118,36 +116,31 @@ module Middleware =
       })
 
     let previewCheck
-      (
-        command: Command,
-        directives: KeyValuePair<string, string seq> seq
-      ) : Task<Result<unit, PerlaMdResult>> =
+      (command: Command, directives: KeyValuePair<string, string seq> seq)
+      : Task<Result<unit, PerlaMdResult>> =
       taskResult {
         if command.IsHidden then
-          Logger.log (
-            "[bold red]This command is in preview.[/]",
-            escape = false
-          )
+          Logger.log("[bold red]This command is in preview.[/]", escape = false)
 
-          Logger.log (
+          Logger.log(
             "[orange1]It may perform unexpected actions or not work at all.[/]",
             escape = false
           )
 
           do!
             HasDirective CliDirectives.Preview directives
-            |> Result.requireTrue (Exit 1)
+            |> Result.requireTrue(Exit 1)
             |> Result.ignore
 
         return ()
       }
-      |> TaskResult.teeError (fun _ ->
-        Logger.log (
+      |> TaskResult.teeError(fun _ ->
+        Logger.log(
           "[orange1]To enable preview commands, run with the [bold yellow][[preview]][/] directive.[/]",
           escape = false
         )
 
-        Logger.log (
+        Logger.log(
           $"[orange1]perla [yellow][[preview]][/] {command.Name} --command --options[/]",
           escape = false
         ))
@@ -164,7 +157,7 @@ module Middleware =
 
 
         if env.IsEsbuildPluginAbsent then
-          Logger.log (
+          Logger.log(
             "The [bold yellow]{Constants.PerlaEsbuildPluginName}[/] plugin was not found in your plugin list.",
             escape = false
           )
@@ -175,24 +168,25 @@ module Middleware =
         | true, false -> return! Error(Exit 1)
 
       }
-      |> TaskResult.teeError (fun error ->
+      |> TaskResult.teeError(fun error ->
         match error with
         | Continue -> ()
         | Exit _ ->
           Logger.log
             "To disable this warning run with the [no-esbuild-plugin] directive"
 
-          Logger.log (
+          Logger.log(
             $"[yellow]perla [[no-esbuild-plugin]] {command.Name}[/] --command --options",
             escape = false
           ))
 
     let setupCheck
       (env: #Setup)
-      (command: Command,
-       directives: KeyValuePair<string, string seq> seq,
-       cancellationToken: CancellationToken)
-      : Task<Result<unit, PerlaMdResult>> =
+      (
+        command: Command,
+        directives: KeyValuePair<string, string seq> seq,
+        cancellationToken: CancellationToken
+      ) : Task<Result<unit, PerlaMdResult>> =
       taskResult {
         do!
           ShouldRunFor command.Name [
@@ -213,7 +207,7 @@ module Middleware =
         do!
           env.RunSetup(isInCI, cancellationToken)
           |> TaskResult.ofTask
-          |> TaskResult.bind (fun result ->
+          |> TaskResult.bind(fun result ->
             Task.FromResult(if result = 0 then Ok() else Error(Exit result)))
           |> TaskResult.ignore
 
@@ -221,13 +215,13 @@ module Middleware =
           env.SaveSetup()
           |> Result.requireNotNull Continue
           |> Result.ignore
-          |> Result.teeError (fun _ ->
+          |> Result.teeError(fun _ ->
             Logger.log
               "We failed to save some checks, while it shouldn't be a problem for your applications you should consider reporting this issue.")
 
         return ()
       }
-      |> TaskResult.teeError (fun error ->
+      |> TaskResult.teeError(fun error ->
         match error with
         | Exit _ ->
           Logger.log "We were unable to set you up for the first time..."
@@ -239,10 +233,11 @@ module Middleware =
 
     let esbuildBinCheck
       (env: #Esbuild)
-      (command: Command,
-       _: KeyValuePair<string, string seq> seq,
-       cancellationToken: CancellationToken)
-      : Task<Result<unit, PerlaMdResult>> =
+      (
+        command: Command,
+        _: KeyValuePair<string, string seq> seq,
+        cancellationToken: CancellationToken
+      ) : Task<Result<unit, PerlaMdResult>> =
       taskResult {
         do! ShouldRunFor command.Name [ "build"; "serve"; "test" ]
 
@@ -252,7 +247,7 @@ module Middleware =
           try
             do! env.RunSetupEsbuild(env.EsbuildVersion, cancellationToken)
           with ex ->
-            Logger.log (
+            Logger.log(
               "We were not able to setup [bold red]esbuild[/]...",
               ex = ex,
               escape = false
@@ -264,7 +259,7 @@ module Middleware =
             env.SaveEsbuildPresent env.EsbuildVersion
             |> Result.requireNotNull Continue
             |> Result.ignore
-            |> Result.teeError (fun _ ->
+            |> Result.teeError(fun _ ->
               Logger.log
                 "We failed to save some checks, while it shouldn't be a problem for your applications you should consider reporting this issue.")
 
@@ -273,10 +268,11 @@ module Middleware =
 
     let templatesCheck
       (env: #Templates)
-      (command: Command,
-       _: KeyValuePair<string, string seq> seq,
-       cancellationToken: CancellationToken)
-      : Task<Result<unit, PerlaMdResult>> =
+      (
+        command: Command,
+        _: KeyValuePair<string, string seq> seq,
+        cancellationToken: CancellationToken
+      ) : Task<Result<unit, PerlaMdResult>> =
       taskResult {
 
         do! ShouldRunFor command.Name [ "new"; "templates" ]
@@ -302,7 +298,7 @@ module Middleware =
             },
             cancellationToken
           )
-          |> Task.bind (fun result ->
+          |> Task.bind(fun result ->
             Task.FromResult(if result = 0 then Ok() else Error(Exit result)))
           |> TaskResult.ignore
 
@@ -312,7 +308,7 @@ module Middleware =
           env.SaveTemplatesArePresent()
           |> Result.requireNotNull Continue
           |> Result.ignore
-          |> Result.teeError (fun _ ->
+          |> Result.teeError(fun _ ->
             Logger.log
               "Failed to install templates, it is not possible continue..."
 
@@ -324,10 +320,11 @@ module Middleware =
 
     let fableCheck
       (env: #Fable)
-      (command: Command,
-       _: KeyValuePair<string, string seq> seq,
-       cancellationToken: CancellationToken)
-      : Task<Result<unit, PerlaMdResult>> =
+      (
+        command: Command,
+        _: KeyValuePair<string, string seq> seq,
+        cancellationToken: CancellationToken
+      ) : Task<Result<unit, PerlaMdResult>> =
       taskResult {
         do! ShouldRunFor command.Name [ "build"; "serve"; "test" ]
 
@@ -345,11 +342,11 @@ module Middleware =
 
           do!
             env.RestoreFable(cancellationToken)
-            |> TaskResult.teeError (fun err ->
+            |> TaskResult.teeError(fun err ->
               Logger.log "dotnet tool restore failed:"
               Logger.log err
               Logger.log "Please try installing fable manually and try again.")
-            |> TaskResult.mapError (fun _ -> Exit 1)
+            |> TaskResult.mapError(fun _ -> Exit 1)
 
           return ()
       }
@@ -371,34 +368,34 @@ module Middleware =
     |> PerlaCliMiddleware.AsMiddleware
     |> MiddlewareImpl.ToSCLMiddleware
 
-  let EsbuildPluginCheck (env: #CliMiddlewareEnv) =
+  let EsbuildPluginCheck(env: #CliMiddlewareEnv) =
     MiddlewareImpl.esbuildPluginCheck env.Esbuild
     |> PerlaCliMiddleware.AsMiddleware
     |> MiddlewareImpl.ToSCLMiddleware
 
-  let SetupCheck (env: #CliMiddlewareEnv) =
+  let SetupCheck(env: #CliMiddlewareEnv) =
 
     MiddlewareImpl.setupCheck env.Setup
     |> PerlaCliMiddleware.AsCancellableMiddleware
     |> MiddlewareImpl.ToSCLMiddleware
 
-  let EsbuildBinCheck (env: #CliMiddlewareEnv) =
+  let EsbuildBinCheck(env: #CliMiddlewareEnv) =
     MiddlewareImpl.esbuildBinCheck env.Esbuild
     |> PerlaCliMiddleware.AsCancellableMiddleware
     |> MiddlewareImpl.ToSCLMiddleware
 
 
-  let TemplatesCheck (env: #CliMiddlewareEnv) =
+  let TemplatesCheck(env: #CliMiddlewareEnv) =
     MiddlewareImpl.templatesCheck env.Templates
     |> PerlaCliMiddleware.AsCancellableMiddleware
     |> MiddlewareImpl.ToSCLMiddleware
 
-  let FableCheck (env: #CliMiddlewareEnv) =
+  let FableCheck(env: #CliMiddlewareEnv) =
     MiddlewareImpl.fableCheck env.Fable
     |> PerlaCliMiddleware.AsCancellableMiddleware
     |> MiddlewareImpl.ToSCLMiddleware
 
-  let RunDotEnv (env: #CliMiddlewareEnv) =
+  let RunDotEnv(env: #CliMiddlewareEnv) =
     MiddlewareImpl.runDotEnv env.DotEnv
     |> PerlaCliMiddleware.AsMiddleware
     |> MiddlewareImpl.ToSCLMiddleware

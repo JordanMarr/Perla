@@ -51,7 +51,7 @@ type internal ApplyPluginsFn = FileTransform -> Async<FileTransform>
 module VirtualFileSystem =
 
   [<return: Struct>]
-  let (|IsFSharpSource|_|) (value: string) =
+  let (|IsFSharpSource|_|)(value: string) =
     let isBin = value.Contains("/bin/")
     let isObj = value.Contains("/obj/")
     let isFsproj = value.EndsWith(".fsproj")
@@ -92,7 +92,7 @@ module VirtualFileSystem =
 
     let changed =
       watcher.Changed
-      |> Observable.map (fun m -> {
+      |> Observable.map(fun m -> {
         serverPath = serverPath
         userPath = userPath
         oldPath = None
@@ -104,7 +104,7 @@ module VirtualFileSystem =
 
     let created =
       watcher.Created
-      |> Observable.map (fun m -> {
+      |> Observable.map(fun m -> {
         serverPath = serverPath
         userPath = userPath
         oldPath = None
@@ -116,7 +116,7 @@ module VirtualFileSystem =
 
     let deleted =
       watcher.Deleted
-      |> Observable.map (fun m -> {
+      |> Observable.map(fun m -> {
         serverPath = serverPath
         userPath = userPath
         oldPath = Some(UMX.tag m.FullPath)
@@ -128,7 +128,7 @@ module VirtualFileSystem =
 
     let renamed =
       watcher.Renamed
-      |> Observable.map (fun m -> {
+      |> Observable.map(fun m -> {
         serverPath = serverPath
         userPath = userPath
         oldPath = Some(UMX.tag m.OldFullPath)
@@ -225,7 +225,7 @@ module VirtualFileSystem =
     =
     taskOption {
       try
-        let! content = readFile (UMX.untag event.path)
+        let! content = readFile(UMX.untag event.path)
 
         return
           event,
@@ -234,10 +234,7 @@ module VirtualFileSystem =
             extension = IO.Path.GetExtension(UMX.untag event.path)
           }
       with ex ->
-        Logger.log (
-          $"[bold yellow]Could not process file {event.path}",
-          ex = ex
-        )
+        Logger.log($"[bold yellow]Could not process file {event.path}", ex = ex)
 
         return! None
     }
@@ -311,14 +308,14 @@ module VirtualFileSystem =
 
     stream
     |> Observable.filter withFilter
-    |> Observable.map (tryReadFile withReadFile)
+    |> Observable.map(tryReadFile withReadFile)
     |> Observable.switchTask
-    |> Observable.map (
-      tryCompileFile (PluginRegistry.RunPlugins<ExtCache> plugins)
+    |> Observable.map(
+      tryCompileFile(PluginRegistry.RunPlugins<ExtCache> plugins)
     )
     |> Observable.switchAsync
     |> Observable.choose id
-    |> Observable.map (updateInVirtualFs withFs)
+    |> Observable.map(updateInVirtualFs withFs)
 
   let Mount config = async {
     use fs = new PhysicalFileSystem()
@@ -328,24 +325,24 @@ module VirtualFileSystem =
     let serverPaths = serverPaths.Value
 
     for KeyValue(url, path) in config.mountDirectories do
-      Logger.log ($"Mounting {path} into {url}...")
+      Logger.log($"Mounting {path} into {url}...")
 
       do!
         IO.Path.Combine(UMX.untag cwd, UMX.untag path)
         |> IO.Path.GetFullPath
         |> getGlobbedFiles
-        |> Seq.map (
+        |> Seq.map(
           processFiles config.plugins url path fs serverPaths applyPlugins
         )
         |> Async.Parallel
         |> Async.Ignore
   }
 
-  let CopyToDisk () =
+  let CopyToDisk() =
     let tempDir = FileSystem.GetTempDir() |> UMX.tag<SystemPath>
     let withMount = serverPaths.Value
     use withFs = new PhysicalFileSystem()
-    copyToDisk (tempDir, withMount, withFs)
+    copyToDisk(tempDir, withMount, withFs)
 
   let GetFileChangeStream
     (mountedDirectories: Map<string<ServerUrl>, string<UserPath>>)
@@ -357,13 +354,13 @@ module VirtualFileSystem =
         IO.Path.Combine(cwd, UMX.untag path) |> observablesForPath url path
     ]
     |> Observable.mergeSeq
-    |> Observable.filter (fun event ->
+    |> Observable.filter(fun event ->
       match UMX.untag event.path with
       | IsFSharpSource() -> false
       | _ -> true)
-    |> Observable.throttle (TimeSpan.FromMilliseconds(450))
+    |> Observable.throttle(TimeSpan.FromMilliseconds(450))
 
-  let TryResolveFile (url: string<ServerUrl>) =
+  let TryResolveFile(url: string<ServerUrl>) =
     try
       serverPaths.Value.ReadAllBytes $"{url}" |> Some
     with _ ->

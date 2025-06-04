@@ -92,10 +92,8 @@ type Skypack =
   }
 
   static member SearchPackage
-    (
-      name: string,
-      [<Optional>] ?page: int
-    ) : Task<PackageSearchResults> =
+    (name: string, [<Optional>] ?page: int)
+    : Task<PackageSearchResults> =
     task {
       let page = defaultArg page 1
 
@@ -131,7 +129,7 @@ type Skypack =
           query [
             if minified then
               "min" => ""
-            if not (String.IsNullOrWhiteSpace esVersion) then
+            if not(String.IsNullOrWhiteSpace esVersion) then
               "dist" => esVersion
             if typescriptTypes then
               "dts" => ""
@@ -145,7 +143,7 @@ type Skypack =
 
       let tryPickFirst (name: string) (headers: HttpResponseHeaders) =
         headers
-        |> Seq.tryPick (fun v ->
+        |> Seq.tryPick(fun v ->
           if v.Key = name then v.Value |> Seq.tryHead else None)
 
       let pinnedUrl =
@@ -162,7 +160,7 @@ type Skypack =
         if typescriptTypes then
           response.headers
           |> tryPickFirst "x-typescript-types"
-          |> Option.map (fun path -> Uri(baseUri, path))
+          |> Option.map(fun path -> Uri(baseUri, path))
         else
           None
 

@@ -132,10 +132,8 @@ module TypeExtensions =
 
     [<Extension>]
     static member WithImports
-      (
-        map: ImportMap,
-        imports: Dictionary<string, string>
-      ) =
+      (map: ImportMap, imports: Dictionary<string, string>)
+      =
       {
         map with
             imports = imports.ToSeq() |> Map.ofSeq

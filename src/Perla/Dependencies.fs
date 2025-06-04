@@ -15,7 +15,7 @@ open Types
 
 module Dependencies =
 
-  let printSearchTable (searchData: PackageSearchResult seq) =
+  let printSearchTable(searchData: PackageSearchResult seq) =
     let table =
       Table()
         .AddColumn(TableColumn("Name"))
@@ -29,7 +29,7 @@ module Dependencies =
       let maintainers =
         row.maintainers
         |> Seq.truncate 3
-        |> Seq.map (fun maintainer ->
+        |> Seq.map(fun maintainer ->
           $"[yellow]{maintainer.name}[/] - [yellow]{maintainer.email}[/]")
 
       let maintainers = String.Join("\n", maintainers)
@@ -44,7 +44,7 @@ module Dependencies =
 
     AnsiConsole.Write table
 
-  let printShowTable (package: PackageInfo) =
+  let printShowTable(package: PackageInfo) =
     let table =
       Table()
         .AddColumn(TableColumn("Description"))
@@ -58,7 +58,7 @@ module Dependencies =
     let maintainers =
       package.maintainers
       |> Seq.truncate 5
-      |> Seq.map (fun maintainer ->
+      |> Seq.map(fun maintainer ->
         $"[yellow]{maintainer.name}[/] - [yellow]{maintainer.email}[/]")
 
     let maintainers = String.Join("\n", maintainers)
@@ -67,7 +67,7 @@ module Dependencies =
       package.distTags
       |> Map.toSeq
       |> Seq.truncate 5
-      |> Seq.map (fun (name, version) ->
+      |> Seq.map(fun (name, version) ->
         $"[bold yellow]{name}[/] - [dim green]{version}[/]")
 
     let versions = String.Join("\n", versions)
@@ -96,9 +96,9 @@ module Dependencies =
 
     AnsiConsole.Write table
 
-  let Search (name: string, page: int) = task {
+  let Search(name: string, page: int) = task {
     let! results =
-      Logger.spinner (
+      Logger.spinner(
         "Searching for package information",
         Skypack.SearchPackage(name, page)
       )
@@ -106,20 +106,20 @@ module Dependencies =
     printfn "%A" results
     results.results |> printSearchTable
 
-    Logger.log (
+    Logger.log(
       $"[bold green]Found[/]: {results.meta.totalCount}",
       escape = false
     )
 
-    Logger.log (
+    Logger.log(
       $"[bold green]Page[/] {results.meta.page} of {results.meta.totalPages}",
       escape = false
     )
   }
 
-  let Show (name: string) = task {
+  let Show(name: string) = task {
     let! package =
-      Logger.spinner (
+      Logger.spinner(
         "Searching for package information",
         Skypack.PackageInfo name
       )
@@ -128,14 +128,12 @@ module Dependencies =
   }
 
   let consolidateResolutions
-    (
-      packages: (string * string) list,
-      newMap: ImportMap
-    ) : Map<string, string> =
+    (packages: (string * string) list, newMap: ImportMap)
+    : Map<string, string> =
 
     let unparsablePackages =
       packages
-      |> List.choose (fun (name, url) ->
+      |> List.choose(fun (name, url) ->
         match ExtractDependencyInfoFromUrl url with
         | ValueSome _ -> None
         | ValueNone -> Some(name, url))
@@ -150,7 +148,7 @@ module Dependencies =
         "if there's an actual dependency from the supported providers here please report it as a bug"
 
       for name, url in unparsablePackages do
-        Logger.log ($"[yellow]{name}[/yellow] - {url}", escape = false)
+        Logger.log($"[yellow]{name}[/yellow] - {url}", escape = false)
 
     let allPackages =
       let unresolved = unparsablePackages
@@ -189,8 +187,7 @@ type Dependencies =
 
       let packages = map.imports |> Map.toList
 
-      let allPackages =
-        Dependencies.consolidateResolutions (packages, resultMap)
+      let allPackages = Dependencies.consolidateResolutions(packages, resultMap)
 
       return { resultMap with imports = allPackages }
     }
@@ -215,11 +212,8 @@ type Dependencies =
     )
 
   static member Restore
-    (
-      packages: string seq,
-      ?provider: Provider,
-      ?runConfig: RunConfiguration
-    ) =
+    (packages: string seq, ?provider: Provider, ?runConfig: RunConfiguration)
+    =
     PackageManager.AddJspm(
       packages,
       [
@@ -251,7 +245,7 @@ type Dependencies =
       ],
       ?provider = provider
     )
-    |> TaskResult.map (fun result -> result.staticDeps, result.map)
+    |> TaskResult.map(fun result -> result.staticDeps, result.map)
 
   static member GetMapAndDependencies
     (
@@ -263,10 +257,10 @@ type Dependencies =
 
     let parsablePackages =
       packages
-      |> List.choose (
+      |> List.choose(
         snd >> ExtractDependencyInfoFromUrl >> Option.ofValueOption
       )
-      |> List.map (fun (_, name, version) -> $"{name}@{version}")
+      |> List.map(fun (_, name, version) -> $"{name}@{version}")
 
     PackageManager.Regenerate(
       parsablePackages,
@@ -281,7 +275,7 @@ type Dependencies =
       importMap = map,
       ?provider = provider
     )
-    |> TaskResult.map (fun result -> result.staticDeps, result.map)
+    |> TaskResult.map(fun result -> result.staticDeps, result.map)
 
   static member Remove
     (
@@ -293,15 +287,15 @@ type Dependencies =
     taskResult {
       let packages =
         map.imports
-        |> Map.filter (fun existing _ -> existing <> package)
+        |> Map.filter(fun existing _ -> existing <> package)
         |> Map.toList
 
       let parsablePackages =
         packages
-        |> List.choose (
+        |> List.choose(
           snd >> ExtractDependencyInfoFromUrl >> Option.ofValueOption
         )
-        |> List.map (fun (_, name, version) -> $"{name}@{version}")
+        |> List.map(fun (_, name, version) -> $"{name}@{version}")
 
       let! resultMap =
         PackageManager.AddJspm(
@@ -318,8 +312,7 @@ type Dependencies =
           provider
         )
 
-      let allPackages =
-        Dependencies.consolidateResolutions (packages, resultMap)
+      let allPackages = Dependencies.consolidateResolutions(packages, resultMap)
 
       return { resultMap with imports = allPackages }
     }
@@ -335,10 +328,10 @@ type Dependencies =
 
       let parsablePackages =
         packages
-        |> List.choose (
+        |> List.choose(
           snd >> ExtractDependencyInfoFromUrl >> Option.ofValueOption
         )
-        |> List.map (fun (_, name, version) -> $"{name}@{version}")
+        |> List.map(fun (_, name, version) -> $"{name}@{version}")
 
       let! resultMap =
         PackageManager.AddJspm(
@@ -354,28 +347,25 @@ type Dependencies =
           provider = provider
         )
 
-      let allPackages =
-        Dependencies.consolidateResolutions (packages, resultMap)
+      let allPackages = Dependencies.consolidateResolutions(packages, resultMap)
 
       return { resultMap with imports = allPackages }
     }
 
   static member LocateDependenciesFromMapAndConfig
-    (
-      importMap: ImportMap,
-      config: PerlaConfig
-    ) =
+    (importMap: ImportMap, config: PerlaConfig)
+    =
     let devDependencies =
-      config.devDependencies |> Seq.map (fun f -> f.name) |> set
+      config.devDependencies |> Seq.map(fun f -> f.name) |> set
 
-    let dependencies = config.dependencies |> Seq.map (fun f -> f.name) |> set
+    let dependencies = config.dependencies |> Seq.map(fun f -> f.name) |> set
 
-    let allTogether = set dependencies |> Set.union (set devDependencies)
+    let allTogether = set dependencies |> Set.union(set devDependencies)
 
     let fromImportMap =
       importMap.imports
       |> Map.toList
-      |> List.choose (fun (name, url) ->
+      |> List.choose(fun (name, url) ->
         match ExtractDependencyInfoFromUrl url with
         | ValueSome value ->
           if allTogether |> Set.contains name then
@@ -383,7 +373,7 @@ type Dependencies =
           else
             None
         | ValueNone -> None)
-      |> List.map (fun (_, name, version) -> {
+      |> List.map(fun (_, name, version) -> {
         name = name
         version = Some version
         alias = None

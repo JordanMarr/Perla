@@ -22,34 +22,30 @@ open FsToolkit.ErrorHandling
 module Build =
 
   let insertCssFiles
-    (
-      document: IHtmlDocument,
-      cssEntryPoints: string<ServerUrl> seq
-    ) =
+    (document: IHtmlDocument, cssEntryPoints: string<ServerUrl> seq)
+    =
     for file in cssEntryPoints do
       let style = document.CreateElement("link")
       style.SetAttribute("rel", "stylesheet")
       style.SetAttribute("href", UMX.untag file)
       style |> document.Head.AppendChild |> ignore
 
-  let insertModulePreloads (document: IHtmlDocument, staticDeps: string seq) =
+  let insertModulePreloads(document: IHtmlDocument, staticDeps: string seq) =
     for dependencyUrl in staticDeps do
       let link = document.CreateElement("link")
       link.SetAttribute("rel", "modulepreload")
       link.SetAttribute("href", dependencyUrl)
       document.Head.AppendChild(link) |> ignore
 
-  let insertImportMap (document: IHtmlDocument, importMap: ImportMap) =
+  let insertImportMap(document: IHtmlDocument, importMap: ImportMap) =
     let script = document.CreateElement("script")
     script.SetAttribute("type", "importmap")
     script.TextContent <- importMap.ToJson()
     document.Head.AppendChild(script) |> ignore
 
   let insertJsFiles
-    (
-      document: IHtmlDocument,
-      jsEntryPoints: string<ServerUrl> seq
-    ) =
+    (document: IHtmlDocument, jsEntryPoints: string<ServerUrl> seq)
+    =
     for entryPoint in jsEntryPoints do
       let script = document.CreateElement("script")
       script.SetAttribute("type", "module")
@@ -69,28 +65,28 @@ type Build =
       ?minify: bool
     ) =
 
-    Build.insertCssFiles (document, cssPaths)
+    Build.insertCssFiles(document, cssPaths)
 
     // importmap needs to go first
-    Build.insertImportMap (document, importMap)
+    Build.insertImportMap(document, importMap)
 
     // if we have module preloads
-    Build.insertModulePreloads (
+    Build.insertModulePreloads(
       document,
       defaultArg staticDependencies Seq.empty
     )
     // remove any existing entry points, we don't need them at this point
     document.QuerySelectorAll("[data-entry-point][type=module]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     document.QuerySelectorAll("[data-entry-point=standalone][type=module]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     document.QuerySelectorAll("[data-entry-point][rel=stylesheet]")
-    |> Seq.iter (fun f -> f.Remove())
+    |> Seq.iter(fun f -> f.Remove())
 
     // insert the resolved entry points which should match paths in mounted directories
-    Build.insertJsFiles (document, jsPaths)
+    Build.insertJsFiles(document, jsPaths)
 
     match defaultArg minify false with
     | true -> document.Minify()
@@ -99,12 +95,12 @@ type Build =
   static member GetEntryPoints(document: IHtmlDocument) =
     let cssBundles =
       document.QuerySelectorAll("[data-entry-point][rel=stylesheet]")
-      |> Seq.choose (fun el -> el.Attributes["href"] |> Option.ofObj)
-      |> Seq.map (fun el -> UMX.tag<ServerUrl> el.Value)
+      |> Seq.choose(fun el -> el.Attributes["href"] |> Option.ofObj)
+      |> Seq.map(fun el -> UMX.tag<ServerUrl> el.Value)
 
     let htmlBundles =
       document.QuerySelectorAll("[data-entry-point][type=module]")
-      |> Seq.choose (fun el -> option {
+      |> Seq.choose(fun el -> option {
         let! entryPoint = el.Attributes["data-entry-point"].Value
 
         if entryPoint = "standalone" then
@@ -113,12 +109,12 @@ type Build =
           return! el.Attributes["src"] |> Option.ofObj
       })
 
-      |> Seq.map (fun el -> UMX.tag<ServerUrl> el.Value)
+      |> Seq.map(fun el -> UMX.tag<ServerUrl> el.Value)
 
     let standaloneBundles =
       document.QuerySelectorAll("[data-entry-point=standalone][type=module]")
-      |> Seq.choose (fun el -> el.Attributes["src"] |> Option.ofObj)
-      |> Seq.map (fun el -> UMX.tag<ServerUrl> el.Value)
+      |> Seq.choose(fun el -> el.Attributes["src"] |> Option.ofObj)
+      |> Seq.map(fun el -> UMX.tag<ServerUrl> el.Value)
 
     cssBundles, htmlBundles, standaloneBundles
 
@@ -126,10 +122,8 @@ type Build =
     let dependencies =
       match config.runConfiguration with
       | RunConfiguration.Production -> config.dependencies
-      | RunConfiguration.Development -> [
-          yield! config.dependencies
-          yield! config.devDependencies
-        ]
+      | RunConfiguration.Development ->
+          [ yield! config.dependencies; yield! config.devDependencies ]
 
     seq {
       for dependency in dependencies do
@@ -152,7 +146,7 @@ type Build =
     let chooseGlobs (startsWith: string) (contains: string) (glob: string) =
       if glob.StartsWith startsWith then
         Some(glob.Substring startsWith.Length)
-      elif not (glob.Contains contains) then
+      elif not(glob.Contains contains) then
         Some(glob)
       else
         None
@@ -161,10 +155,10 @@ type Build =
     let lfsGlob =
 
       let localIncludes =
-        config.includes |> Seq.choose (chooseGlobs "lfs:" "vfs:") |> Seq.toList
+        config.includes |> Seq.choose(chooseGlobs "lfs:" "vfs:") |> Seq.toList
 
       let localExcludes =
-        config.excludes |> Seq.choose (chooseGlobs "lfs:" "vfs:") |> Seq.toList
+        config.excludes |> Seq.choose(chooseGlobs "lfs:" "vfs:") |> Seq.toList
 
       {
         BaseDirectory = FileSystem.CurrentWorkingDirectory() |> UMX.untag
@@ -174,10 +168,10 @@ type Build =
 
     let vfsGlob =
       let virtualIncludes =
-        config.includes |> Seq.choose (chooseGlobs "vfs:" "lfs:") |> Seq.toList
+        config.includes |> Seq.choose(chooseGlobs "vfs:" "lfs:") |> Seq.toList
 
       let virtualExcludes =
-        config.excludes |> Seq.choose (chooseGlobs "vfs:" "lfs:") |> Seq.toList
+        config.excludes |> Seq.choose(chooseGlobs "vfs:" "lfs:") |> Seq.toList
 
       {
         BaseDirectory = UMX.untag tempDir
@@ -216,7 +210,7 @@ type Build =
 
         let copyLocal =
           copyAndIncrement
-            (UMX.untag (FileSystem.CurrentWorkingDirectory()))
+            (UMX.untag(FileSystem.CurrentWorkingDirectory()))
             lfsTask
 
         let copyVirtual = copyAndIncrement (UMX.untag tempDir) vfsTask

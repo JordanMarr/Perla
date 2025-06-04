@@ -57,7 +57,7 @@ module Configuration =
       | None -> Assert.Fail "Should not be None"
 
     [<Fact>]
-    let ``FromDecoders.GetFable returns respects existing config`` () =
+    let ``FromDecoders.GetFable returns respects existing config``() =
       let expectedProject = "./fsharp/App.fsproj"
       let expectedOutDir = "./src/js"
       let expectedExtension = ".js"
@@ -105,7 +105,7 @@ module Configuration =
       Assert.True(result.IsNone)
 
     [<Fact>]
-    let ``FromDecoders.GetDevServer returns DecodedDevServer`` () =
+    let ``FromDecoders.GetDevServer returns DecodedDevServer``() =
       let config = Defaults.DevServerConfig
 
       let decoded: DecodedDevServer = {
@@ -134,7 +134,7 @@ module Configuration =
       | None -> Assert.Fail "DevServer config should be present"
 
     [<Fact>]
-    let ``FromDecoders.GetDevServer respects existing config`` () =
+    let ``FromDecoders.GetDevServer respects existing config``() =
       let expectedPort = 4000
       let expectedHost = "0.0.0.0"
       let expectedUseSSL = false
@@ -171,16 +171,14 @@ module Configuration =
       | None -> Assert.Fail "DevServer config should be present"
 
     [<Fact>]
-    let ``FromDecoders.GetBuild returns None if no DecodedBuild is present``
-      ()
-      =
+    let ``FromDecoders.GetBuild returns None if no DecodedBuild is present``() =
       let config = Defaults.BuildConfig
       let result = FromDecoders.GetBuild(config, None)
       Assert.True(result.IsNone)
 
 
     [<Fact>]
-    let ``FromDecoders.GetBuild returns DecodedBuild`` () =
+    let ``FromDecoders.GetBuild returns DecodedBuild``() =
       let config = Defaults.BuildConfig
 
       let decoded: DecodedBuild = {
@@ -210,7 +208,7 @@ module Configuration =
       | None -> Assert.Fail "Build config should be present"
 
     [<Fact>]
-    let ``FromDecoders.GetBuild respects existing values`` () =
+    let ``FromDecoders.GetBuild respects existing values``() =
 
       let expectedOutDir = "./bin/dist"
       let expectedEmitEnvFile = false
@@ -258,7 +256,7 @@ module Configuration =
 
 
     [<Fact>]
-    let ``FromDecoders.GetEsbuild returns DecodedBuild`` () =
+    let ``FromDecoders.GetEsbuild returns DecodedBuild``() =
       let config = Defaults.EsbuildConfig
 
       let decoded: DecodedEsbuild = {
@@ -304,7 +302,7 @@ module Configuration =
       | None -> Assert.Fail "Build config should be present"
 
     [<Fact>]
-    let ``FromDecoders.GetEsbuild respects existing values`` () =
+    let ``FromDecoders.GetEsbuild respects existing values``() =
       let expectedVersion = "0.0.0"
       let expectedEcmaVersion = "ES2022"
       let expectedMinify = false
@@ -370,7 +368,7 @@ module Configuration =
 
 
     [<Fact>]
-    let ``FromDecoders.GetTesting returns DecodedBuild`` () =
+    let ``FromDecoders.GetTesting returns DecodedBuild``() =
       let config = Defaults.TestConfig
 
       let decoded: DecodedTesting = {
@@ -408,7 +406,7 @@ module Configuration =
       | None -> Assert.Fail "Build config should be present"
 
     [<Fact>]
-    let ``FromDecoders.GetTesting respects existing values`` () =
+    let ``FromDecoders.GetTesting respects existing values``() =
       let expectedHeadless = true
       let expectedBrowser = Browser.Firefox
       let expectedBrowserMode = BrowserMode.Sequential
@@ -458,7 +456,7 @@ module Configuration =
     open ConfigExtraction
 
     [<Fact>]
-    let ``FromFields.GetServerFields gives you the default values`` () =
+    let ``FromFields.GetServerFields gives you the default values``() =
       let config = Defaults.DevServerConfig
       let serverOptions = FromFields.GetServerFields(config, None)
 
@@ -472,7 +470,7 @@ module Configuration =
       Assert.Equal<DevServerField>(expectedOptions, serverOptions)
 
     [<Fact>]
-    let ``FromFields.GetServerFields gives you provided values`` () =
+    let ``FromFields.GetServerFields gives you provided values``() =
       let config = Defaults.DevServerConfig
 
       let expectedOptions = seq {
@@ -488,7 +486,7 @@ module Configuration =
 
 
     [<Fact>]
-    let ``FromFields.GetMinify Returns minification based on run config`` () =
+    let ``FromFields.GetMinify Returns minification based on run config``() =
       let notMinified =
         FromFields.GetMinify(RunConfiguration.Development, Seq.empty)
 
@@ -499,7 +497,7 @@ module Configuration =
       Assert.True(minified)
 
     [<Fact>]
-    let ``FromFields.GetMinify can extract MinifySources from field seq`` () =
+    let ``FromFields.GetMinify can extract MinifySources from field seq``() =
       let minified =
         FromFields.GetMinify(
           RunConfiguration.Development,
@@ -597,12 +595,12 @@ module Configuration =
 
   // we're not picking up env variables yet for perla config
   [<Fact>]
-  let ``fromEnv returns the same config passed`` () =
+  let ``fromEnv returns the same config passed``() =
     let config = Defaults.PerlaConfig
     Assert.Equal(config, ConfigExtraction.FromEnv config)
 
   [<Fact>]
-  let ``fromFile should update devServer options in perla config`` () =
+  let ``fromFile should update devServer options in perla config``() =
     let config = Defaults.PerlaConfig
 
     let configText =

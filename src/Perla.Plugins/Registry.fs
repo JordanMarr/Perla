@@ -31,7 +31,7 @@ module SessionFactory =
     )
 
 module ScriptReflection =
-  let inline findPlugin (fsi: FsiEvaluationSession) =
+  let inline findPlugin(fsi: FsiEvaluationSession) =
     match fsi.TryFindBoundValue "Plugin", fsi.TryFindBoundValue "plugin" with
     | Some bound, _ -> Some bound.Value
     | None, Some bound -> Some bound.Value
@@ -67,7 +67,7 @@ module PluginRegistry =
       | false, _ -> ()
   ]
 
-  let inline GetPluginList<'Cache when PluginCache<'Cache>> () =
+  let inline GetPluginList<'Cache when PluginCache<'Cache>>() =
     'Cache.PluginCache.Value.Values |> Seq.toList
 
   let inline RunPlugins<'Cache when PluginCache<'Cache>>
@@ -92,15 +92,13 @@ module PluginRegistry =
     let list = GetPluginList<'Cache>()
 
     list
-    |> List.exists (fun plugin ->
+    |> List.exists(fun plugin ->
 
       match plugin.shouldProcessFile with
       | ValueSome f -> f extension
       | _ -> false)
 
-  let inline LoadFromCode<'Cache when PluginCache<'Cache>>
-    (plugin: PluginInfo)
-    =
+  let inline LoadFromCode<'Cache when PluginCache<'Cache>>(plugin: PluginInfo) =
     if 'Cache.PluginCache.Value.TryAdd(plugin.name, plugin) then
       Ok()
     else
@@ -111,11 +109,8 @@ type PluginRegistry =
 
   static member inline LoadFromText<'Cache, 'Writer
     when PluginCache<'Cache> and SessionCache<'Cache> and StdoutStderr<'Writer>>
-    (
-      id,
-      content,
-      cancellationToken
-    ) =
+    (id, content, cancellationToken)
+    =
     result {
       let mutable discard: FsiEvaluationSession = Unchecked.defaultof<_>
       let sessionCache = 'Cache.SessionCache

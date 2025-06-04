@@ -13,7 +13,7 @@ open IcedTasks
 open Perla.Plugins
 open Perla.Plugins.Registry
 
-let pluginFactory (amount: int) = [
+let pluginFactory(amount: int) = [
   for i in 1..amount do
     {
       name = sprintf "test%d" i
@@ -66,13 +66,13 @@ module Runnables =
     Assert.Equal(5, runnables.Length)
 
   [<Fact>]
-  let ``GetPluginList should bring all of the plugins in cache`` () =
+  let ``GetPluginList should bring all of the plugins in cache``() =
     let plugins = PluginRegistry.GetPluginList<RunnableContainer>()
 
     Assert.Equal(10, plugins.Length)
 
   [<Fact>]
-  let ``LoadFromCode should give error if the plugin is already there`` () =
+  let ``LoadFromCode should give error if the plugin is already there``() =
     let plugin = PluginRegistry.GetPluginList<RunnableContainer>()[0]
     let result = PluginRegistry.LoadFromCode<RunnableContainer>(plugin)
 

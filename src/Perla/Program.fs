@@ -23,7 +23,7 @@ module PerlaEnv =
         member _.SaveSetup() = Checks.SaveSetup()
 
         member _.RunSetup(isInCI, token) =
-          Handlers.runSetup (
+          Handlers.runSetup(
             {
               skipPrompts = isInCI
               installTemplates = not isInCI
@@ -32,7 +32,7 @@ module PerlaEnv =
           )
     }
 
-  let esbuild (config: PerlaConfig) =
+  let esbuild(config: PerlaConfig) =
     { new Esbuild with
         member _.EsbuildVersion = config.esbuild.version
 
@@ -57,7 +57,7 @@ module PerlaEnv =
             options: TemplateRepositoryOptions,
             token: System.Threading.CancellationToken
           ) : Task<int> =
-          Handlers.runTemplate (options, token)
+          Handlers.runTemplate(options, token)
 
         member _.SaveTemplatesArePresent() : LiteDB.ObjectId =
           Checks.SaveTemplatesPresent()
@@ -65,7 +65,7 @@ module PerlaEnv =
         member _.TemplatesArePresent() : bool = Checks.AreTemplatesPresent()
     }
 
-  let fable (config: PerlaConfig) =
+  let fable(config: PerlaConfig) =
     { new Fable with
         member _.IsFableInConfig = config.fable.IsSome
         member _.IsFablePresent token = FileSystem.CheckFableExists token
@@ -95,7 +95,7 @@ let main argv =
 
   let maybeHelp = Input.OptionMaybe([ "--info" ], "Brings the Help dialog")
 
-  let handler (_: InvocationContext, _: bool option) =
+  let handler(_: InvocationContext, _: bool option) =
 
     Task.FromResult 0
 
@@ -105,10 +105,10 @@ let main argv =
 
   rootCommand argv {
     description "The Perla Dev Server!"
-    inputs (Input.Context(), maybeHelp)
+    inputs(Input.Context(), maybeHelp)
     setHandler handler
 
-    usePipeline (fun pipeline ->
+    usePipeline(fun pipeline ->
       pipeline
         // don't replace leading @ strings e.g. @lit-labs/task
         .UseTokenReplacer(fun _ _ _ -> false)

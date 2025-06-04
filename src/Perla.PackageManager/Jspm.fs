@@ -116,8 +116,8 @@ type JspmGenerator =
       install = packages |> Seq.toArray
       env =
         environments
-        |> Option.map (fun envs -> envs |> Seq.map (fun e -> e.AsString))
-      provider = provider |> Option.map (fun p -> p.AsString)
+        |> Option.map(fun envs -> envs |> Seq.map(fun e -> e.AsString))
+      provider = provider |> Option.map(fun p -> p.AsString)
       inputMap = inputMap
       flattenScope = flattenScope
       graph = graph
@@ -145,12 +145,14 @@ type JspmGenerator =
         return Error result.error
       else
         let! result =
-          Response.deserializeJsonWithTAsync<{|
-            staticDeps: string seq option
-            dynamicDeps: string seq option
-            map: ImportMap option
-            graph: DependencyGraph option
-          |}>
+          Response.deserializeJsonWithTAsync<
+            {|
+              staticDeps: string seq option
+              dynamicDeps: string seq option
+              map: ImportMap option
+              graph: DependencyGraph option
+            |}
+           >
             opts
             req
 

@@ -14,20 +14,20 @@ let LanguageSelector
   (translations: IStore<TranslationCollection option * Language>)
   =
   let setLanguage language =
-    Store.modify (fun (translations, _) -> translations, language)
+    Store.modify(fun (translations, _) -> translations, language)
 
   let setUS = setLanguage EnUs
   let setDE = setLanguage DeDe
   let setES = setLanguage EsMx
 
   let isUS =
-    translations |> Observable.map (fun (_, language) -> language = EnUs)
+    translations |> Observable.map(fun (_, language) -> language = EnUs)
 
   let isDE =
-    translations |> Observable.map (fun (_, language) -> language = DeDe)
+    translations |> Observable.map(fun (_, language) -> language = DeDe)
 
   let isES =
-    translations |> Observable.map (fun (_, language) -> language = EsMx)
+    translations |> Observable.map(fun (_, language) -> language = EsMx)
 
   Html.header [
     Html.section [
@@ -36,7 +36,7 @@ let LanguageSelector
           type' "radio"
           Attr.id "language-en"
           Attr.name "language"
-          Bind.attr ("checked", isUS)
+          Bind.attr("checked", isUS)
           on "change" (fun _ -> setUS translations) []
         ]
         Html.label [ Html.text "English"; Attr.for' "language-en" ]
@@ -46,7 +46,7 @@ let LanguageSelector
           type' "radio"
           Attr.id "language-de"
           Attr.name "language"
-          Bind.attr ("checked", isDE)
+          Bind.attr("checked", isDE)
           on "change" (fun _ -> setDE translations) []
         ]
         Html.label [ Html.text "Deutsch"; Attr.for' "language-de" ]
@@ -56,7 +56,7 @@ let LanguageSelector
           type' "radio"
           Attr.id "language-es"
           Attr.name "language"
-          Bind.attr ("checked", isES)
+          Bind.attr("checked", isES)
           on "change" (fun _ -> setES translations) []
         ]
         Html.label [ Html.text "Español"; Attr.for' "language-es" ]
@@ -67,7 +67,7 @@ let LanguageSelector
     rule "header" [ Css.displayFlex; Css.justifyContentFlexEnd ]
     rule "section" [
       Css.displayFlex
-      Css.custom ("justify-content", "space-evenly")
+      Css.custom("justify-content", "space-evenly")
     ]
   ]
 
@@ -87,8 +87,8 @@ let NotificationGenerator
   Html.form [
     disposeOnUnmount [ header; content; canSubmitSub ]
     Attr.className "nf"
-    Ev.onSubmit (fun e ->
-      e.preventDefault ()
+    Ev.onSubmit(fun e ->
+      e.preventDefault()
 
       Store.set
         notifications
@@ -97,26 +97,26 @@ let NotificationGenerator
     Html.fieldSet [
       Html.label [
         Attr.for' "header-input"
-        Bind.el (Tr("notification:header", "Encabezado"), Html.text)
+        Bind.el(Tr("notification:header", "Encabezado"), Html.text)
       ]
       Html.input [
         Attr.className "nf-input"
         Attr.id "header-input"
-        Ev.onTextInput (Store.set header)
+        Ev.onTextInput(Store.set header)
       ]
       Html.label [
         Attr.for' "content-input"
-        Bind.el (Tr("notification:message", "Contenido"), Html.text)
+        Bind.el(Tr("notification:message", "Contenido"), Html.text)
       ]
       Html.input [
         Attr.className "nf-input"
         Attr.id "content-input"
-        Ev.onTextInput (Store.set content)
+        Ev.onTextInput(Store.set content)
       ]
       Html.button [
         Attr.typeSubmit
         Attr.disabled disableSubmit
-        Bind.el (
+        Bind.el(
           Tr("notification:generate", "Generar Notificationes"),
           Html.text
         )
@@ -132,27 +132,27 @@ let NotificationGenerator
     rule ".nf fieldset" [
       Css.displayFlex
       Css.flexDirectionColumn
-      Css.fontSize (em 1.5)
+      Css.fontSize(em 1.5)
       Css.color "var(--primary-color)"
       // Css.custom("color", )
-      Css.margin (em 0.5)
+      Css.margin(em 0.5)
     ]
-    rule "button" [ Css.marginTop (em 1) ]
+    rule "button" [ Css.marginTop(em 1) ]
   ]
 
-let NotificationArea (notifications: IStore<Notification list>) =
+let NotificationArea(notifications: IStore<Notification list>) =
   Html.aside [
     Attr.className "notification-area"
-    Bind.each (
+    Bind.each(
       notifications,
       fun notif ->
         printfn "%A" notif
 
-        Html.custom (
+        Html.custom(
           "fs-message",
           [
-            Attr.custom ("header", notif.header)
-            Attr.custom ("kind", notif.kind)
+            Attr.custom("header", notif.header)
+            Attr.custom("kind", notif.kind)
             Html.p notif.message
             onCustomEvent
               "fs-close-message"
@@ -161,7 +161,7 @@ let NotificationArea (notifications: IStore<Notification list>) =
                 Store.set
                   notifications
                   (notifications.Value
-                   |> List.filter (fun notification -> notif <> notification)))
+                   |> List.filter(fun notification -> notif <> notification)))
               []
           ]
         )
@@ -170,7 +170,7 @@ let NotificationArea (notifications: IStore<Notification list>) =
   |> withStyle [
     rule ".notification-area" [
       Css.positionAbsolute
-      Css.top (perc (10))
-      Css.right (perc (10))
+      Css.top(perc(10))
+      Css.right(perc(10))
     ]
   ]
