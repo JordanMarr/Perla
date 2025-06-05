@@ -13,12 +13,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet: [8.0.x, 9.0.x]
     steps:
       - uses: actions/checkout@v4
       - name: Setup .NET Core
         uses: actions/setup-dotnet@v4
+        id: stepid
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: ${{ matrix.dotnet }}
+      - name: Create temporary global.json
+        run: echo '{"sdk":{"version":"${{ steps.stepid.outputs.dotnet-version }}","rollForward":"latestMinor"}}' > ./global.json
       - name: Install local tools
         run: dotnet tool restore
       - name: Restore Solution
