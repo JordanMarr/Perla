@@ -1,5 +1,0 @@
-group Plugins
-    FSharp.Compiler.Service
-    FSharp.Control.AsyncSeq
-    FsToolkit.ErrorHandling
-    IcedTasks
