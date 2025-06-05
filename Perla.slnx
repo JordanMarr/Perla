@@ -1,0 +1,36 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Folder Name="/sample/">
+    <Project Path="sample/src/App.fsproj" />
+    <Project Path="sample/tests/App.Tests.fsproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".config/dotnet-tools.json" />
+    <File Path=".editorconfig" />
+    <File Path=".gitignore" />
+    <File Path=".gitpod.Dockerfile" />
+    <File Path=".gitpod.yml" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="LICENSE" />
+    <File Path="perla.schema.json" />
+    <File Path="README.md" />
+    <File Path="src/Directory.Build.props" />
+    <File Path="tools.fsx" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Flan/Flan.vbproj" />
+    <Project Path="src/Perla.Logger/Perla.Logger.fsproj" />
+    <Project Path="src/Perla.PackageManager/Perla.PackageManager.fsproj" />
+    <Project Path="src/Perla.Plugins/Perla.Plugins.fsproj" />
+    <Project Path="src/Perla/Perla.fsproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Perla.Plugins.Tests/Perla.Plugins.Tests.fsproj" />
+    <Project Path="tests/Perla.Tests/Perla.Tests.fsproj" />
+  </Folder>
+</Solution>
