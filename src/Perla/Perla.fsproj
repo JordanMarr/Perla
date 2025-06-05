@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>perla</ToolCommandName>
@@ -83,5 +83,27 @@
     <ProjectReference Include="..\Perla.PackageManager\Perla.PackageManager.fsproj" />
     <ProjectReference Include="..\Perla.Plugins\Perla.Plugins.fsproj" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="FSharp.Compiler.Service" />
+    <PackageReference Include="FSharp.Control.AsyncSeq" />
+    <PackageReference Include="FSharp.Control.Reactive" />
+    <PackageReference Include="FSharp.SystemCommandLine" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="FSharp.UMX" />
+    <PackageReference Include="Thoth.Json.Net" />
+    <PackageReference Include="Fake.IO.FileSystem" />
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="CliWrap" />
+    <PackageReference Include="FsHttp" />
+    <PackageReference Include="SharpZipLib" />
+    <PackageReference Include="LiteDB" />
+    <PackageReference Include="Scriban" />
+    <PackageReference Include="Zio" />
+    <PackageReference Include="Yarp.ReverseProxy" />
+    <PackageReference Include="Hellang.Middleware.SpaFallback" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Microsoft.Playwright" />
+  </ItemGroup>
+
 </Project>

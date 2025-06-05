@@ -10,5 +10,10 @@
   <ItemGroup>
     <ProjectReference Include="..\Perla\Perla.fsproj" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+  <ItemGroup>
+    <PackageReferecnce Include="System.CommandLine" />
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="FSharp.Core" />
+  </ItemGroup>
+
 </Project>

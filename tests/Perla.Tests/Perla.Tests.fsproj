@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <GenerateProgramFile>false</GenerateProgramFile>
     <IsTestProject>true</IsTestProject>
@@ -21,5 +21,20 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Perla\Perla.fsproj" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+
+  <ItemGroup>
+    <PackageReference Include="FSharp.Core" />
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="CliWrap" />
+    <PackageReference Include="LiteDB" />
+    <PackageReference Include="FSharp.UMX" />
+    <PackageReference Include="Thoth.Json.Net" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="FsHttp" />
+    <PackageReference Include="FSharp.SystemCommandLine" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
 </Project>
