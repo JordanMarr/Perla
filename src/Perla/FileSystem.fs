@@ -214,14 +214,12 @@ module FileSystem =
     task {
       try
         let! req = get url |> Request.sendTAsync
-        use! stream = req |> Response.toStreamTAsync
+        let token = defaultArg cancellationToken CancellationToken.None
+        use! stream = req |> Response.toStreamTAsync token
         Logger.log $"Downloading esbuild from: {url}"
         use file = File.Create(compressedFile)
 
-        do!
-          match cancellationToken with
-          | Some token -> stream.CopyToAsync(file, cancellationToken = token)
-          | None -> stream.CopyToAsync(file)
+        do! stream.CopyToAsync(file, cancellationToken = token)
 
         Logger.log $"Downloaded esbuild to: {file.Name}"
 

@@ -140,10 +140,15 @@ type JspmGenerator =
         |> Request.sendTAsync
 
       if req.statusCode <> HttpStatusCode.OK then
-        let! result = req |> Response.deserializeJsonTAsync<{| error: string |}>
+        let token = System.Threading.CancellationToken.None
+
+        let! result =
+          req |> Response.deserializeJsonTAsync<{| error: string |}> token
 
         return Error result.error
       else
+        let token = System.Threading.CancellationToken.None
+
         let! result =
           Response.deserializeJsonWithTAsync<
             {|
@@ -154,6 +159,7 @@ type JspmGenerator =
             |}
            >
             opts
+            token
             req
 
         return

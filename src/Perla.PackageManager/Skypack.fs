@@ -84,17 +84,20 @@ let options = JsonSerializerOptions(IncludeFields = true)
 type Skypack =
 
   static member PackageInfo(name: string) : Task<PackageInfo> = task {
+    let token = System.Threading.CancellationToken.None
+
     let! res =
       http { GET $"{Constants.SKYPACK_API}/package/{name}" }
       |> Request.sendTAsync
 
-    return! Response.deserializeJsonWithTAsync options res
+    return! Response.deserializeJsonWithTAsync options token res
   }
 
   static member SearchPackage
     (name: string, [<Optional>] ?page: int)
     : Task<PackageSearchResults> =
     task {
+      let token = System.Threading.CancellationToken.None
       let page = defaultArg page 1
 
       let! res =
@@ -104,7 +107,7 @@ type Skypack =
         }
         |> Request.sendTAsync
 
-      return! Response.deserializeJsonWithTAsync options res
+      return! Response.deserializeJsonWithTAsync options token res
     }
 
   static member PackageUrls

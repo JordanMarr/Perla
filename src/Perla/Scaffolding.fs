@@ -178,8 +178,9 @@ module Scaffolding =
       }
       |> Request.sendTAsync
 
+    let token = System.Threading.CancellationToken.None
 
-    use! stream = url |> Response.toStreamTAsync
+    use! stream = url |> Response.toStreamTAsync token
 
     return FileSystem.ExtractTemplateZip (user, repository, branch) stream
   }
