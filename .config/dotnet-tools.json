@@ -4,21 +4,11 @@
   "tools": {
     "fantomas": {
       "version": "7.0.2",
-      "commands": [
-        "fantomas"
-      ]
+      "commands": ["fantomas"]
     },
     "fable": {
       "version": "4.25.0",
-      "commands": [
-        "fable"
-      ]
-    },
-    "paket": {
-      "version": "9.0.2",
-      "commands": [
-        "paket"
-      ]
+      "commands": ["fable"]
     }
   }
 }
