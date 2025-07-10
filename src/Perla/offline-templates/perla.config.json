@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/AngelMunoz/Perla/fs-rework/perla.templates.schema.json",
+  "$schema": "https://raw.githubusercontent.com/AngelMunoz/Perla/dev/perla.templates.schema.json",
   "name": "Perla Templates",
   "description": "Official Perla template starters",
   "author": "Perla",
