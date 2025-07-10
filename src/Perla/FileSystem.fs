@@ -15,6 +15,7 @@ open IcedTasks
 open FSharp.UMX
 
 open FsToolkit.ErrorHandling
+open Thoth.Json.Net
 
 open FSharp.Data.Adaptive
 
@@ -498,7 +499,7 @@ module FileSystem =
           let! config = cancellableTask {
             try
               let! content =
-                File.ReadAllTextAsync(targetPath / "perla.config.json")
+                File.ReadAllTextAsync(targetPath / "perla.config.json", token)
 
               return Some content
             with _ ->
@@ -508,9 +509,7 @@ module FileSystem =
           match config with
           | Some config ->
             let decoded =
-              Thoth.Json.Net.Decode.fromString
-                TemplateDecoders.TemplateConfigurationDecoder
-                config
+              Decode.fromString TemplateConfigurationDecoder config
               |> Result.teeError(fun error ->
                 args.Logger.LogWarning(
                   "Failed to decode template configuration: {error}",
