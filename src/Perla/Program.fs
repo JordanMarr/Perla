@@ -1,13 +1,15 @@
 ﻿// Learn more about F# at http://docs.microsoft.com/dotnet/fsharp
 
+open Microsoft.Extensions.Logging
 open FSharp.SystemCommandLine
+open Perla
+open Perla.RequestHandler
+open Perla.FileSystem
 open Perla
 open Perla.Commands
 open Perla.Logger
 
 module Env =
-  open Microsoft.Extensions.Logging
-  open Perla.FileSystem
 
   let SetupAppContainer() =
     let lf =
@@ -23,18 +25,33 @@ module Env =
 
     let AppLogger = lf.CreateLogger("Perla")
 
-    let directories = FileSystem.GetDirectories()
+    let directories = PerlaDirectories.Create()
 
     directories.SetCwdToProject()
 
     let platform = PlatformOps.Create()
-    let pfsm = FileSystem.GetManager(AppLogger, platform, directories)
+
+    let requestHandler =
+      RequestHandler.Create {
+        Logger = AppLogger
+        PlatformOps = platform
+        PerlaDirectories = directories
+      }
+
+    let pfsm =
+      FileSystem.GetManager {
+        Logger = AppLogger
+        PlatformOps = platform
+        PerlaDirectories = directories
+        RequestHandler = requestHandler
+      }
 
     AppContainer.Create {
       Logger = AppLogger
       Directories = directories
       FsManager = pfsm
       Platform = platform
+      RequestHandler = requestHandler
     }
 
 [<EntryPoint>]

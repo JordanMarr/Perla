@@ -14,6 +14,7 @@ open Perla.Units
 open Perla.FileSystem
 open Microsoft.Extensions.Logging
 open Json.TemplateDecoders
+open Perla
 
 [<Class; Sealed>]
 type PerlaCheck() =

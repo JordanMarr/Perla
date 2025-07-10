@@ -11,24 +11,8 @@ open Perla
 open Perla.Types
 open Perla.Units
 open Perla.Json.TemplateDecoders
-
-[<Measure>]
-type Repository
-
-[<Measure>]
-type Branch
-
-[<Interface>]
-type PerlaDirectories =
-  abstract AssemblyRoot: string<SystemPath> with get
-  abstract PerlaArtifactsRoot: string<SystemPath> with get
-  abstract Database: string<SystemPath> with get
-  abstract Templates: string<SystemPath> with get
-  abstract OfflineTemplates: string<SystemPath> with get
-  abstract OriginalCwd: string<SystemPath>
-  abstract PerlaConfigPath: string<SystemPath> with get
-  abstract CurrentWorkingDirectory: string<SystemPath> with get
-  abstract SetCwdToProject: ?fromPath: string<SystemPath> -> unit
+open Perla
+open Perla.RequestHandler
 
 [<Interface>]
 type PerlaFsManager =
@@ -82,12 +66,14 @@ type PerlaFsManager =
   abstract EmitEnvFile:
     config: PerlaConfig * ?tmpPath: string<SystemPath> -> unit
 
+type PerlaFsManagerArgs = {
+  Logger: ILogger
+  PlatformOps: PlatformOps
+  PerlaDirectories: PerlaDirectories
+  RequestHandler: RequestHandler
+}
 
 [<RequireQualifiedAccess>]
 module FileSystem =
 
-  val GetDirectories: unit -> PerlaDirectories
-
-  val GetManager:
-    logger: ILogger * env: PlatformOps * dirs: PerlaDirectories ->
-      PerlaFsManager
+  val GetManager: args: PerlaFsManagerArgs -> PerlaFsManager

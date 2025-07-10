@@ -10,8 +10,10 @@ open FSharp.Data.Adaptive
 
 open Perla
 open Perla.Types
-open Perla.Database
+open Perla
+open Perla.RequestHandler
 open Perla.FileSystem
+open Perla.Database
 open Perla.Fable
 open Perla.Esbuild
 open Perla.Extensibility
@@ -263,6 +265,9 @@ type HasPlatformOps =
 type HasDirectories =
   abstract member Directories: PerlaDirectories
 
+type HasRequestHandler =
+  abstract member RequestHandler: RequestHandler
+
 type HasFsManager =
   abstract member FsManager: PerlaFsManager
 
@@ -304,12 +309,14 @@ type AppContainer =
   inherit HasTemplateService
   inherit HasConfiguration
   inherit HasPkgManager
+  inherit HasRequestHandler
 
 type AppContainerArgs = {
   Logger: ILogger
   Directories: PerlaDirectories
   FsManager: PerlaFsManager
   Platform: PlatformOps
+  RequestHandler: RequestHandler
 }
 
 module AppContainer =
@@ -322,10 +329,9 @@ module AppContainer =
           Directories = directories
           FsManager = fsManager
           Platform = platformOps
+          RequestHandler = requestHandler
         } =
       args
-
-    let fsManager = FileSystem.GetManager(logger, platformOps, directories)
 
     let database =
       let getConnection() : LiteDB.ILiteDatabase =
@@ -401,6 +407,7 @@ module AppContainer =
         member _.TemplateService = templateService
         member _.Configuration = configurationManager
         member _.PkgManager = pkgManager
+        member _.RequestHandler = requestHandler
     }
 
 [<AutoOpen>]
@@ -411,6 +418,9 @@ module Patterns =
   let inline (|Directories|)(container: #HasDirectories) = container.Directories
   let inline (|FsManager|)(container: #HasFsManager) = container.FsManager
   let inline (|Database|)(container: #HasDatabase) = container.Db
+
+  let inline (|RequestHandler|)(container: #HasRequestHandler) =
+    container.RequestHandler
 
   let inline (|EsbuildService|)(container: #HasEsbuildService) =
     container.EsbuildService

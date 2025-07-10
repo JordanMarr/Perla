@@ -25,6 +25,10 @@
     <Compile Include="PlatformOps.fs" />
     <Compile Include="Json.fsi" />
     <Compile Include="Json.fs" />
+    <Compile Include="Directories.fsi" />
+    <Compile Include="Directories.fs" />
+    <Compile Include="RequestHandler.fsi" />
+    <Compile Include="RequestHandler.fs" />
     <Compile Include="FileSystem.fsi" />
     <Compile Include="FileSystem.fs" />
     <Compile Include="Database.fsi" />

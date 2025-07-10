@@ -10,7 +10,7 @@ open FSharp.UMX
 
 open Perla.Units
 open Perla.Json.TemplateDecoders
-open Perla.FileSystem
+open Perla
 
 
 [<Class; Sealed>]

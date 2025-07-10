@@ -31,7 +31,11 @@ module Units =
   [<Measure>]
   type ResolutionUrl
 
+  [<Measure>]
+  type Repository
 
+  [<Measure>]
+  type Branch
 
 module Types =
   open FSharp.UMX

@@ -1,7 +1,6 @@
 namespace Perla.FileSystem
 
 open System
-open System.Formats.Tar
 open System.IO
 open System.IO.Compression
 open System.Text
@@ -11,8 +10,6 @@ open Perla.Types
 
 open CliWrap
 open CliWrap.Buffered
-
-open FsHttp
 
 open IcedTasks
 open FSharp.UMX
@@ -30,6 +27,8 @@ open Perla
 open Perla.Units
 open Perla.Json
 open Perla.Json.TemplateDecoders
+open Perla
+open Perla.RequestHandler
 
 [<RequireQualifiedAccess>]
 type PerlaFileChange =
@@ -37,27 +36,8 @@ type PerlaFileChange =
   | PerlaConfig
   | ImportMap
 
-[<Measure>]
-type Repository
-
-[<Measure>]
-type Branch
-
-[<Interface>]
-type PerlaDirectories =
-  abstract AssemblyRoot: string<SystemPath> with get
-  abstract PerlaArtifactsRoot: string<SystemPath> with get
-  abstract Database: string<SystemPath> with get
-  abstract Templates: string<SystemPath> with get
-  abstract OfflineTemplates: string<SystemPath> with get
-  abstract PerlaConfigPath: string<SystemPath> with get
-  abstract OriginalCwd: string<SystemPath> with get
-  abstract CurrentWorkingDirectory: string<SystemPath> with get
-  abstract SetCwdToProject: ?fromPath: string<SystemPath> -> unit
-
 [<Interface>]
 type PerlaFsManager =
-
 
   abstract PerlaConfiguration: Types.PerlaConfig aval
 
@@ -116,78 +96,21 @@ module Operators =
   let inline (|/) (a: string<SystemPath>) (b: string) =
     Path.Combine(UMX.untag a, UMX.untag b) |> UMX.tag<SystemPath>
 
+type PerlaFsManagerArgs = {
+  Logger: ILogger
+  PlatformOps: PlatformOps
+  PerlaDirectories: PerlaDirectories
+  RequestHandler: RequestHandler
+}
+
 [<RequireQualifiedAccess>]
 module FileSystem =
 
-  [<TailCall>]
-  let rec findConfig filename (directory: DirectoryInfo | null) =
-    match directory with
-    | null -> None
-    | directory ->
-      let found =
-        directory.GetFiles(filename, SearchOption.TopDirectoryOnly)
-        |> Array.tryHead
-
-      match found with
-      | Some found -> Some found
-      | None -> findConfig filename directory.Parent
-
-  let GetDirectories() =
-
-    let findPerlaConfig = findConfig "perla.json"
-
-    let originalcwd = Directory.GetCurrentDirectory() |> UMX.tag<SystemPath>
-
-    { new PerlaDirectories with
-        member _.AssemblyRoot = UMX.tag<SystemPath> AppContext.BaseDirectory
-
-        member _.CurrentWorkingDirectory =
-          UMX.tag<SystemPath>(Directory.GetCurrentDirectory())
-
-        member _.PerlaArtifactsRoot =
-          Environment.GetFolderPath
-            Environment.SpecialFolder.LocalApplicationData
-          / Constants.ArtifactsDirectoryname
-          |> UMX.tag<SystemPath>
-
-        member this.Database =
-          this.PerlaArtifactsRoot |/ Constants.TemplatesDatabase
-
-        member this.Templates =
-          this.PerlaArtifactsRoot |/ Constants.TemplatesDirectory
-
-        member this.OfflineTemplates =
-          this.PerlaArtifactsRoot |/ Constants.OfflineTemplatesDirectory
-
-        member this.PerlaConfigPath =
-          let cwd = DirectoryInfo(UMX.untag this.CurrentWorkingDirectory)
-
-          findPerlaConfig cwd
-          |> Option.defaultWith(fun () -> FileInfo(cwd.FullName / "perla.json"))
-          |> _.FullName
-          |> UMX.tag<SystemPath>
-
-        member _.OriginalCwd = originalcwd
-
-        member this.SetCwdToProject(?fromPath) =
-          let path =
-            option {
-              let! path = fromPath
-              let! file = findPerlaConfig(DirectoryInfo(UMX.untag path))
-              return file.FullName
-            }
-            |> function
-              | Some path -> path
-              | None -> UMX.untag this.OriginalCwd
-
-          Directory.SetCurrentDirectory path
-    }
-
-  let GetManager(logger: ILogger, env: PlatformOps, dirs: PerlaDirectories) =
+  let GetManager(args: PerlaFsManagerArgs) : PerlaFsManager =
     { new PerlaFsManager with
 
         member _.PerlaConfiguration = adaptive {
-          let path = UMX.untag dirs.PerlaConfigPath
+          let path = UMX.untag args.PerlaDirectories.PerlaConfigPath
           let! content = AdaptiveFile.TryReadAllText path
 
           match content with
@@ -210,7 +133,7 @@ module FileSystem =
             RegularExpressions.Regex
               "PERLA_(?<envvarname>[a-zA-Z0-9_]+)\\s*=\\s*(?<content>.+)"
 
-          let path = UMX.untag dirs.CurrentWorkingDirectory
+          let path = UMX.untag args.PerlaDirectories.CurrentWorkingDirectory
           let dotEnvFiles = AdaptiveDirectory.GetFiles(path, "*.env")
 
           let parseEnvLine line =
@@ -258,7 +181,9 @@ module FileSystem =
         }
 
         member _.ResolveImportMap = adaptive {
-          let path = dirs.CurrentWorkingDirectory |/ Constants.ImportMapName
+          let path =
+            args.PerlaDirectories.CurrentWorkingDirectory
+            |/ Constants.ImportMapName
 
           let! content = AdaptiveFile.TryReadAllText(UMX.untag path)
 
@@ -274,14 +199,16 @@ module FileSystem =
         }
 
         member _.ResolveTsConfig = adaptive {
-          let path = dirs.CurrentWorkingDirectory |/ "tsconfig.json"
+          let path =
+            args.PerlaDirectories.CurrentWorkingDirectory |/ "tsconfig.json"
+
           let! content = AdaptiveFile.TryReadAllText(UMX.untag path)
           return content
         }
 
         member _.ResolveDescriptionsFile() = cancellableTask {
           let path =
-            UMX.untag dirs.AssemblyRoot / "descriptions.json"
+            UMX.untag args.PerlaDirectories.AssemblyRoot / "descriptions.json"
             |> UMX.tag<SystemPath>
 
           try
@@ -295,7 +222,11 @@ module FileSystem =
 
         member _.ResolveOfflineTemplatesConfig() = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
-          let path = UMX.untag dirs.OfflineTemplates / "perla.config.json"
+
+          let path =
+            UMX.untag args.PerlaDirectories.OfflineTemplates
+            / "perla.config.json"
+
           let! content = File.ReadAllTextAsync(path, token)
 
           let decoded =
@@ -306,7 +237,7 @@ module FileSystem =
           match decoded with
           | Ok config -> return config
           | Error error ->
-            logger.LogWarning(
+            args.Logger.LogWarning(
               "Failed to decode offline templates configuration: {error}",
               error
             )
@@ -318,20 +249,22 @@ module FileSystem =
 
 
         member _.ResolvePluginPaths() =
-          let path = dirs.CurrentWorkingDirectory |/ ".perla" / "plugins"
+          let path =
+            args.PerlaDirectories.CurrentWorkingDirectory
+            |/ ".perla" / "plugins"
 
           !! $"{path}/**/*.fsx"
           |> Seq.toArray
           |> Array.Parallel.map(fun path -> path, File.ReadAllText path)
 
         member this.ResolveEsbuildPath() =
-          let bin = if env.IsWindows() then "" else "bin"
-          let exec = if env.IsWindows() then ".exe" else ""
+          let bin = if args.PlatformOps.IsWindows() then "" else "bin"
+          let exec = if args.PlatformOps.IsWindows() then ".exe" else ""
 
           let esbuildVersion =
             this.PerlaConfiguration |> AVal.map _.esbuild.version |> AVal.force
 
-          dirs.PerlaArtifactsRoot
+          args.PerlaDirectories.PerlaArtifactsRoot
           |/ UMX.untag esbuildVersion
           |/ "package"
           |/ bin
@@ -345,7 +278,7 @@ module FileSystem =
 
           let! content =
             File.ReadAllTextAsync(
-              UMX.untag dirs.AssemblyRoot / "livereload.js",
+              UMX.untag args.PerlaDirectories.AssemblyRoot / "livereload.js",
               token
             )
 
@@ -357,7 +290,7 @@ module FileSystem =
 
           let! content =
             File.ReadAllTextAsync(
-              UMX.untag dirs.AssemblyRoot / "mocha-runner.js",
+              UMX.untag args.PerlaDirectories.AssemblyRoot / "mocha-runner.js",
               token
             )
 
@@ -369,7 +302,8 @@ module FileSystem =
 
           let! content =
             File.ReadAllTextAsync(
-              UMX.untag dirs.AssemblyRoot / "testing-helpers.js",
+              UMX.untag args.PerlaDirectories.AssemblyRoot
+              / "testing-helpers.js",
               token
             )
 
@@ -381,7 +315,7 @@ module FileSystem =
 
           let! content =
             File.ReadAllTextAsync(
-              UMX.untag dirs.AssemblyRoot / "worker.js",
+              UMX.untag args.PerlaDirectories.AssemblyRoot / "worker.js",
               token
             )
 
@@ -390,21 +324,32 @@ module FileSystem =
 
         member _.SaveImportMap(map) = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
-          let path = dirs.CurrentWorkingDirectory |/ Constants.ImportMapName
+
+          let path =
+            args.PerlaDirectories.CurrentWorkingDirectory
+            |/ Constants.ImportMapName
+
           let content = Json.ToText(map)
           do! File.WriteAllTextAsync(UMX.untag path, content, token)
         }
 
         member _.SavePerlaConfig(config: PerlaConfig) = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
-          let path = dirs.CurrentWorkingDirectory |/ Constants.PerlaConfigName
+
+          let path =
+            args.PerlaDirectories.CurrentWorkingDirectory
+            |/ Constants.PerlaConfigName
+
           let content = Json.ToText(config)
           do! File.WriteAllTextAsync(UMX.untag path, content, token)
         }
 
         member _.SavePerlaConfig(updates: PerlaConfig.PerlaWritableField seq) = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
-          let path = dirs.CurrentWorkingDirectory |/ Constants.PerlaConfigName
+
+          let path =
+            args.PerlaDirectories.CurrentWorkingDirectory
+            |/ Constants.PerlaConfigName
 
           let! mutableConfig = taskOption {
             try
@@ -434,51 +379,12 @@ module FileSystem =
 
         member this.SetupEsbuild(version) = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
+          do! args.RequestHandler.DownloadEsbuild version
 
-          let esbuildVersion = UMX.untag version
-
-          let binString = $"{env.PlatformString()}-{env.ArchString()}"
-
-          let compressedFile =
-            dirs.PerlaArtifactsRoot |/ esbuildVersion / "esbuild.tgz"
-
-
-          let url =
-            $"https://registry.npmjs.org/@esbuild/{binString}/-/{binString}-{esbuildVersion}.tgz"
-
-          let dir =
-            DirectoryInfo(
-              UMX.untag compressedFile |> Path.GetDirectoryName |> nonNull
-            )
-
-          dir.Create()
-
-          let extractDir = UMX.untag dirs.PerlaArtifactsRoot / UMX.untag version
-
-          try
-            let! req =
-              get url |> Config.cancellationToken token |> Request.sendTAsync
-
-            use! stream = req |> Response.toStreamTAsync token
-            use source = new GZipStream(stream, CompressionMode.Decompress)
-
-            do!
-              TarFile.ExtractToDirectoryAsync(
-                source,
-                UMX.untag extractDir,
-                true,
-                token
-              )
-          // extracts $"./{extractDir}/package/bin/esbuild"
-          // extracts $"./{extractDir}/package/esbuild.exe" in windows
-          with ex ->
-            logger.LogWarning("Failed to extract esbuild from {url}", url, ex)
-            return ()
-
-          if not(env.IsWindows()) then
+          if not(args.PlatformOps.IsWindows()) then
             let esbuildBinaryPath = this.ResolveEsbuildPath() |> UMX.untag
 
-            logger.LogInformation(
+            args.Logger.LogInformation(
               "Executing: chmod +x on \"{esbuildBinaryPath}\"",
               esbuildBinaryPath
             )
@@ -486,25 +392,28 @@ module FileSystem =
             let command =
               Cli
                 .Wrap("chmod")
-                .WithStandardOutputPipe(PipeTarget.ToDelegate logger.LogDebug)
-                .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogDebug)
+                .WithStandardOutputPipe(
+                  PipeTarget.ToDelegate args.Logger.LogDebug
+                )
+                .WithStandardErrorPipe(
+                  PipeTarget.ToDelegate args.Logger.LogDebug
+                )
                 .WithArguments
                 $"+x {esbuildBinaryPath}"
 
             let! _ = command.ExecuteAsync token
 
-            logger.LogInformation(
+            args.Logger.LogInformation(
               "Successfully set executable permissions for {esbuildBinaryPath}",
               esbuildBinaryPath
             )
 
-            logger.LogInformation
+            args.Logger.LogInformation
               "This setup should happen once per machine. If you see it often please report a bug."
 
             return ()
           else
-
-            logger.LogInformation
+            args.Logger.LogInformation
               "This setup should happen once per machine. If you see it often please report a bug."
 
             return ()
@@ -513,7 +422,7 @@ module FileSystem =
         member _.SetupFable() = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
 
-          let ext = if env.IsWindows() then ".exe" else ""
+          let ext = if args.PlatformOps.IsWindows() then ".exe" else ""
           let dotnet = $"dotnet{ext}"
 
           let dotnetCmd = Cli.Wrap(dotnet)
@@ -526,10 +435,12 @@ module FileSystem =
               .ExecuteBufferedAsync(token)
 
           if fableExists.ExitCode = 0 then
-            logger.LogInformation "Fable is already installed, skipping setup."
+            args.Logger.LogInformation
+              "Fable is already installed, skipping setup."
+
             return ()
 
-          logger.LogInformation "Fable is not installed, installing..."
+          args.Logger.LogInformation "Fable is not installed, installing..."
 
           let! installCmd =
             dotnetCmd
@@ -541,44 +452,46 @@ module FileSystem =
               token
 
           if installCmd.ExitCode <> 0 then
-            logger.LogError(
+            args.Logger.LogError(
               "Failed to install Fable: {Error}",
               installCmd.StandardError
             )
 
             return ()
 
-          logger.LogInformation "Fable installed successfully."
+          args.Logger.LogInformation "Fable installed successfully."
           return ()
         }
 
         member _.SetupTemplate(user, repository, branch) = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
 
-          let! url =
-            get
-              $"https://github.com/{user}/{repository}/archive/refs/heads/{branch}.zip"
-            |> Config.cancellationToken token
-            |> Request.sendTAsync
-
-          use! stream = url |> Response.toStreamTAsync token
+          use! stream =
+            args.RequestHandler.DownloadTemplate(user, repository, branch)
 
           let targetPath =
             Path.Combine(
-              UMX.untag dirs.Templates,
+              UMX.untag args.PerlaDirectories.Templates,
               $"{user}-{repository}-{branch}"
             )
 
           try
             Directory.Delete(targetPath, true)
-          with ex ->
+          with _ ->
             ()
 
           use zip = new ZipArchive(stream)
-          zip.ExtractToDirectory(UMX.untag dirs.Templates, true)
+
+          zip.ExtractToDirectory(
+            UMX.untag args.PerlaDirectories.Templates,
+            true
+          )
 
           Directory.Move(
-            Path.Combine(UMX.untag dirs.Templates, $"{repository}-{branch}"),
+            Path.Combine(
+              UMX.untag args.PerlaDirectories.Templates,
+              $"{repository}-{branch}"
+            ),
             targetPath
           )
 
@@ -599,7 +512,7 @@ module FileSystem =
                 TemplateDecoders.TemplateConfigurationDecoder
                 config
               |> Result.teeError(fun error ->
-                logger.LogWarning(
+                args.Logger.LogWarning(
                   "Failed to decode template configuration: {error}",
                   error
                 ))
@@ -610,7 +523,7 @@ module FileSystem =
               |> Option.map(fun config ->
                 UMX.tag<SystemPath> targetPath, config)
           | None ->
-            logger.LogWarning(
+            args.Logger.LogWarning(
               "No Configuration File found in template {user}/{repository}@{branch}",
               user,
               repository,
@@ -649,7 +562,8 @@ module FileSystem =
               |> Seq.toList
 
             {
-              BaseDirectory = dirs.CurrentWorkingDirectory |> UMX.untag
+              BaseDirectory =
+                args.PerlaDirectories.CurrentWorkingDirectory |> UMX.untag
               Includes = localIncludes
               Excludes = localExcludes
             }
@@ -708,7 +622,7 @@ module FileSystem =
 
               let copyLocal =
                 copyAndIncrement
-                  (UMX.untag dirs.CurrentWorkingDirectory)
+                  (UMX.untag args.PerlaDirectories.CurrentWorkingDirectory)
                   lfsTask
 
               let copyVirtual = copyAndIncrement (UMX.untag tempDir) vfsTask
@@ -724,9 +638,11 @@ module FileSystem =
           let content = this.DotEnvContents |> AVal.force
 
           if Map.isEmpty content then
-            logger.LogInformation("No environment variables to emit, skipping.")
+            args.Logger.LogInformation(
+              "No environment variables to emit, skipping."
+            )
           else
-            logger.LogInformation(
+            args.Logger.LogInformation(
               "Emitting environment variables to {Path}",
               UMX.untag config.envPath
             )

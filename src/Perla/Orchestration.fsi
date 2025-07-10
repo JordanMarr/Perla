@@ -10,6 +10,8 @@ open FSharp.Data.Adaptive
 open Perla
 open Perla.Types
 open Perla.Database
+open Perla.RequestHandler
+open Perla
 open Perla.FileSystem
 open Perla.Fable
 open Perla.Esbuild
@@ -68,6 +70,9 @@ module Warmup =
 type HasLogger =
   abstract member Logger: ILogger
 
+type HasRequestHandler =
+  abstract member RequestHandler: RequestHandler
+
 type HasPlatformOps =
   abstract member PlatformOps: PlatformOps
 
@@ -115,12 +120,14 @@ type AppContainer =
   inherit HasTemplateService
   inherit HasConfiguration
   inherit HasPkgManager
+  inherit HasRequestHandler
 
 type AppContainerArgs = {
   Logger: ILogger
   Directories: PerlaDirectories
   FsManager: PerlaFsManager
   Platform: PlatformOps
+  RequestHandler: RequestHandler
 }
 
 
@@ -135,6 +142,7 @@ module Patterns =
   val inline (|FsManager|): container: #HasFsManager -> PerlaFsManager
   val inline (|Database|): container: #HasDatabase -> PerlaDatabase
   val inline (|EsbuildService|): container: #HasEsbuildService -> EsbuildService
+  val inline (|RequestHandler|): container: #HasRequestHandler -> RequestHandler
 
   val inline (|ExtensibilityService|):
     container: #HasExtensibilityService -> ExtensibilityService
