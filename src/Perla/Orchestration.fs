@@ -349,6 +349,7 @@ module AppContainer =
         Cwd = directories.CurrentWorkingDirectory
         PerlaFsManager = fsManager
         Logger = logger
+        PlatformOps = platformOps
       }
 
     let extensibilityService = ExtensibilityService.Create logger

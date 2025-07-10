@@ -5,7 +5,6 @@ open FSharp.SystemCommandLine
 open Perla
 open Perla.RequestHandler
 open Perla.FileSystem
-open Perla
 open Perla.Commands
 open Perla.Logger
 
@@ -29,7 +28,7 @@ module Env =
 
     directories.SetCwdToProject()
 
-    let platform = PlatformOps.Create()
+    let platform = PlatformOps.Create(AppLogger)
 
     let requestHandler =
       RequestHandler.Create {

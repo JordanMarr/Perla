@@ -3,6 +3,7 @@
 open IcedTasks
 open FSharp.UMX
 
+open Perla
 open Perla.FileSystem
 open Perla.Types
 open Perla.Units
@@ -19,6 +20,7 @@ type EsbuildServiceArgs = {
   Cwd: string<SystemPath>
   PerlaFsManager: PerlaFsManager
   Logger: Microsoft.Extensions.Logging.ILogger
+  PlatformOps: PlatformOps
 }
 
 [<Interface>]

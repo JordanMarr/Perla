@@ -1,6 +1,7 @@
 ﻿namespace Perla.Fable
 
 open System.Collections.Generic
+open System.Threading
 open Microsoft.Extensions.Logging
 
 open IcedTasks
@@ -19,7 +20,9 @@ type FableService =
 
   abstract member Run: FableConfig -> CancellableTask<unit>
 
-  abstract member Monitor: config: FableConfig -> IAsyncEnumerable<FableEvent>
+  abstract member Monitor:
+    config: FableConfig * ?cancellationToken: CancellationToken ->
+      IAsyncEnumerable<FableEvent>
 
   abstract member IsPresent: unit -> CancellableTask<bool>
 

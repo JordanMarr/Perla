@@ -1,15 +1,209 @@
 namespace Perla
 
+open System
+open System.IO
+open System.Text
 open System.Runtime.InteropServices
+open IcedTasks
+open FSharp.UMX
+open Perla.Units
+open Perla.Types
+open Microsoft.Extensions.Logging
+open CliWrap
+open CliWrap.Buffered
+open CliWrap.EventStream
+open FSharp.Control
+open System.Collections.Generic
+open System.Threading
 
+[<RequireQualifiedAccess>]
+type ProcessEvent =
+  | Started of processId: int
+  | StandardOutput of text: string
+  | StandardError of text: string
+  | Exited of exitCode: int
+
+type ProcessResult = {
+  ExitCode: int
+  StandardOutput: string
+  StandardError: string
+}
 
 type PlatformOps =
   abstract member IsWindows: unit -> bool
   abstract member PlatformString: unit -> string
   abstract member ArchString: unit -> string
 
+  // Process execution methods
+  abstract CheckDotnetToolVersion:
+    toolName: string -> CancellableTask<ProcessResult>
+
+  abstract InstallDotnetTool: toolName: string -> CancellableTask<ProcessResult>
+
+  abstract RunFable:
+    project: string<SystemPath> *
+    outDir: string<SystemPath> option *
+    extension: string<FileExtension> ->
+      CancellableTask<unit>
+
+  abstract StreamFable:
+    project: string<SystemPath> *
+    outDir: string<SystemPath> option *
+    extension: string<FileExtension> *
+    ?cancellationToken: CancellationToken ->
+      IAsyncEnumerable<ProcessEvent>
+
+  abstract IsFableAvailable: unit -> CancellableTask<bool>
+
+  abstract RunEsbuildTransform:
+    sourceCode: string *
+    loader: string option *
+    target: string *
+    minify: bool *
+    jsxAutomatic: bool *
+    jsxImportSource: string option *
+    tsconfig: string option ->
+      CancellableTask<string>
+
+  abstract RunEsbuildCss:
+    esbuildPath: string<SystemPath> *
+    workingDir: string<SystemPath> *
+    entrypoint: string *
+    outdir: string *
+    minify: bool *
+    fileLoaders: Map<string, string> ->
+      CancellableTask<unit>
+
+  abstract RunEsbuildJs:
+    esbuildPath: string<SystemPath> *
+    workingDir: string<SystemPath> *
+    entrypoint: string *
+    outdir: string *
+    config: EsbuildConfig ->
+      CancellableTask<unit>
+
 module PlatformOps =
-  let Create() =
+
+  let private getDotnetExecutable(isWindows: bool) =
+    let ext = if isWindows then ".exe" else ""
+    $"dotnet{ext}"
+
+  let private addProject
+    (project: string<SystemPath>)
+    (args: Builders.ArgumentsBuilder)
+    =
+    args.Add $"{project}"
+
+  let private addOutDir
+    (outdir: string<SystemPath> option)
+    (args: Builders.ArgumentsBuilder)
+    =
+    match outdir with
+    | Some outdir -> args.Add([ "-o"; $"{outdir}" ])
+    | None -> args
+
+  let private addExtension
+    (extension: string<FileExtension>)
+    (args: Builders.ArgumentsBuilder)
+    =
+    args.Add([ "-e"; $"{extension}" ])
+
+  let private addWatch (watch: bool) (args: Builders.ArgumentsBuilder) =
+    if watch then args.Add "watch" else args
+
+  let private buildFableCommand
+    (isWindows: bool)
+    (project: string<SystemPath>)
+    (outDir: string<SystemPath> option)
+    (extension: string<FileExtension>)
+    (watch: bool)
+    =
+    let execBin = getDotnetExecutable isWindows
+
+    Cli
+      .Wrap(execBin)
+      .WithArguments(fun args ->
+        args.Add "fable"
+        |> addWatch watch
+        |> addProject project
+        |> addOutDir outDir
+        |> addExtension extension
+        |> ignore)
+
+  let private buildEsbuildArguments
+    (target: string)
+    (minify: bool)
+    (jsxAutomatic: bool)
+    (jsxImportSource: string option)
+    (tsconfig: string option)
+    (loader: string option)
+    =
+    fun (args: Builders.ArgumentsBuilder) ->
+      let args = args.Add $"--target={target}"
+      let args = args.Add "--format=esm"
+      let args = if minify then args.Add "--minify" else args
+      let args = if jsxAutomatic then args.Add "--jsx=automatic" else args
+
+      let args =
+        match jsxImportSource with
+        | Some source -> args.Add $"--jsx-import-source={source}"
+        | None -> args
+
+      let args =
+        match tsconfig with
+        | Some config -> args.Add $"--tsconfig-raw={config}"
+        | None -> args
+
+      let args =
+        match loader with
+        | Some l -> args.Add $"--loader={l}"
+        | None -> args
+
+      args.Add "--keep-names"
+
+  let private buildEsbuildFileLoaders(fileLoaders: Map<string, string>) =
+    fun (args: Builders.ArgumentsBuilder) ->
+      fileLoaders
+      |> Map.fold
+        (fun (acc: Builders.ArgumentsBuilder) ext loader ->
+          acc.Add $"--loader:{ext}={loader}")
+        args
+
+  let private buildEsbuildConfig(config: EsbuildConfig) =
+    fun (args: Builders.ArgumentsBuilder) ->
+      let args = args.Add $"--target={config.ecmaVersion}"
+      let args = args.Add "--format=esm"
+      let args = args.Add "--bundle"
+      let args = if config.minify then args.Add "--minify" else args
+
+      let args =
+        if config.jsxAutomatic then
+          args.Add "--jsx=automatic"
+        else
+          args
+
+      let args =
+        match config.jsxImportSource with
+        | Some source -> args.Add $"--jsx-import-source={source}"
+        | None -> args
+
+      let args =
+        config.externals
+        |> Seq.fold
+          (fun (acc: Builders.ArgumentsBuilder) ext ->
+            acc.Add $"--external:{ext}")
+          args
+
+      let args =
+        config.aliases
+        |> Map.fold
+          (fun (acc: Builders.ArgumentsBuilder) alias target ->
+            acc.Add $"--alias:{alias}={target}")
+          args
+
+      args
+
+  let Create(logger: ILogger) =
     { new PlatformOps with
         member _.IsWindows() =
           RuntimeInformation.IsOSPlatform OSPlatform.Windows
@@ -33,4 +227,193 @@ module PlatformOps =
           | Architecture.X64 -> "x64"
           | Architecture.X86 -> "ia32"
           | _ -> failwith "Unsupported Architecture"
+
+        member this.CheckDotnetToolVersion(toolName) = cancellableTask {
+          let! token = CancellableTask.getCancellationToken()
+
+          let dotnetCmd =
+            Cli
+              .Wrap(getDotnetExecutable(this.IsWindows()))
+              .WithArguments([ toolName; "--version" ])
+              .WithValidation(CommandResultValidation.None)
+
+          let! result = dotnetCmd.ExecuteBufferedAsync(token)
+
+          return {
+            ExitCode = result.ExitCode
+            StandardOutput = result.StandardOutput
+            StandardError = result.StandardError
+          }
+        }
+
+        member this.InstallDotnetTool(toolName) = cancellableTask {
+          let! token = CancellableTask.getCancellationToken()
+
+          let dotnetCmd =
+            Cli
+              .Wrap(getDotnetExecutable(this.IsWindows()))
+              .WithArguments(
+                [ "tool"; "install"; toolName; "--create-manifest-if-needed" ]
+              )
+              .WithValidation(CommandResultValidation.None)
+
+          let! result = dotnetCmd.ExecuteBufferedAsync(token)
+
+          return {
+            ExitCode = result.ExitCode
+            StandardOutput = result.StandardOutput
+            StandardError = result.StandardError
+          }
+        }
+
+        member this.RunFable(project, outDir, extension) = cancellableTask {
+          let! token = CancellableTask.getCancellationToken()
+
+          let command =
+            (buildFableCommand (this.IsWindows()) project outDir extension false)
+              .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
+              .WithStandardOutputPipe(
+                PipeTarget.ToDelegate logger.LogInformation
+              )
+              .ExecuteAsync(cancellationToken = token)
+
+          do! command.Task :> System.Threading.Tasks.Task
+          return ()
+        }
+
+        member this.StreamFable
+          (project, outDir, extension, ?cancellationToken)
+          =
+          taskSeq {
+            let token = defaultArg cancellationToken CancellationToken.None
+
+            let command =
+              buildFableCommand (this.IsWindows()) project outDir extension true
+
+            for event: CommandEvent in command.ListenAsync(token) do
+              match event with
+              | :? StartedCommandEvent as started ->
+                logger.LogInformation(
+                  "Fable started with pid: [{ProcessId}]",
+                  started.ProcessId
+                )
+
+                ProcessEvent.Started started.ProcessId
+              | :? StandardOutputCommandEvent as stdout ->
+                logger.LogInformation stdout.Text
+                ProcessEvent.StandardOutput stdout.Text
+              | :? StandardErrorCommandEvent as stderr ->
+                logger.LogError stderr.Text
+                ProcessEvent.StandardError stderr.Text
+              | :? ExitedCommandEvent as exited ->
+                logger.LogInformation(
+                  "Fable exited with code: [{ExitCode}]",
+                  exited.ExitCode
+                )
+
+                ProcessEvent.Exited exited.ExitCode
+              | _ -> ()
+          }
+
+        member this.IsFableAvailable() = cancellableTask {
+          let! token = CancellableTask.getCancellationToken()
+
+          let command =
+            Cli
+              .Wrap(getDotnetExecutable(this.IsWindows()))
+              .WithArguments([ "fable"; "--version" ])
+              .WithValidation(CommandResultValidation.None)
+              .ExecuteAsync(cancellationToken = token)
+
+          let! result = command.Task
+          return result.ExitCode = 0
+        }
+
+        member _.RunEsbuildTransform
+          (
+            sourceCode,
+            loader,
+            target,
+            minify,
+            jsxAutomatic,
+            jsxImportSource,
+            tsconfig
+          ) =
+          cancellableTask {
+            let! token = CancellableTask.getCancellationToken()
+            use writer = new MemoryStream()
+
+            let command =
+              Cli
+                .Wrap("esbuild")
+                .WithStandardInputPipe(PipeSource.FromString sourceCode)
+                .WithStandardOutputPipe(PipeTarget.ToStream writer)
+                .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
+                .WithArguments(fun args ->
+                  buildEsbuildArguments
+                    target
+                    minify
+                    jsxAutomatic
+                    jsxImportSource
+                    tsconfig
+                    loader
+                    args
+                  |> ignore)
+                .WithValidation(CommandResultValidation.None)
+
+            let! result = command.ExecuteAsync(cancellationToken = token)
+            return Encoding.UTF8.GetString(writer.ToArray())
+          }
+
+        member _.RunEsbuildCss
+          (esbuildPath, workingDir, entrypoint, outdir, minify, fileLoaders)
+          =
+          cancellableTask {
+            let! token = CancellableTask.getCancellationToken()
+
+            let command =
+              Cli
+                .Wrap(esbuildPath |> UMX.untag)
+                .WithWorkingDirectory(workingDir |> UMX.untag)
+                .WithStandardOutputPipe(
+                  PipeTarget.ToDelegate logger.LogInformation
+                )
+                .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
+                .WithArguments(fun argsBuilder ->
+                  argsBuilder.Add(entrypoint).Add("--bundle")
+                  |> (if minify then fun a -> a.Add("--minify") else id)
+                  |> fun a -> a.Add($"--outdir={outdir}")
+                  |> buildEsbuildFileLoaders fileLoaders
+                  |> ignore)
+
+            let! result = command.ExecuteAsync(cancellationToken = token)
+            return ()
+          }
+
+        member _.RunEsbuildJs
+          (esbuildPath, workingDir, entrypoint, outdir, config)
+          =
+          cancellableTask {
+            let! token = CancellableTask.getCancellationToken()
+
+            let command =
+              Cli
+                .Wrap(esbuildPath |> UMX.untag)
+                .WithWorkingDirectory(workingDir |> UMX.untag)
+                .WithStandardOutputPipe(
+                  PipeTarget.ToDelegate logger.LogInformation
+                )
+                .WithStandardErrorPipe(
+                  PipeTarget.ToDelegate logger.LogInformation
+                )
+                .WithArguments(fun argsBuilder ->
+                  argsBuilder.Add(entrypoint)
+                  |> buildEsbuildConfig config
+                  |> fun a -> a.Add($"--outdir={outdir}")
+                  |> buildEsbuildFileLoaders config.fileLoaders
+                  |> ignore)
+
+            let! result = command.ExecuteAsync(cancellationToken = token)
+            return ()
+          }
     }

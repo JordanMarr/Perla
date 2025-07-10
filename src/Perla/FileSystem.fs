@@ -8,9 +8,6 @@ open System.Text.Json.Nodes
 open Microsoft.Extensions.Logging
 open Perla.Types
 
-open CliWrap
-open CliWrap.Buffered
-
 open IcedTasks
 open FSharp.UMX
 
@@ -379,63 +376,56 @@ module FileSystem =
         }
 
         member this.SetupEsbuild(version) = cancellableTask {
-          let! token = CancellableTask.getCancellationToken()
           do! args.RequestHandler.DownloadEsbuild version
 
           if not(args.PlatformOps.IsWindows()) then
             let esbuildBinaryPath = this.ResolveEsbuildPath() |> UMX.untag
 
             args.Logger.LogInformation(
-              "Executing: chmod +x on \"{esbuildBinaryPath}\"",
+              "Setting executable permissions for \"{esbuildBinaryPath}\"",
               esbuildBinaryPath
             )
 
-            let command =
-              Cli
-                .Wrap("chmod")
-                .WithStandardOutputPipe(
-                  PipeTarget.ToDelegate args.Logger.LogDebug
-                )
-                .WithStandardErrorPipe(
-                  PipeTarget.ToDelegate args.Logger.LogDebug
-                )
-                .WithArguments
-                $"+x {esbuildBinaryPath}"
+            // Set executable permissions on Unix-like systems
+            try
+              // Use UnixFileMode to set executable permissions
+              File.SetUnixFileMode(
+                esbuildBinaryPath,
+                UnixFileMode.UserRead
+                ||| UnixFileMode.UserWrite
+                ||| UnixFileMode.UserExecute
+                ||| UnixFileMode.GroupRead
+                ||| UnixFileMode.GroupExecute
+                ||| UnixFileMode.OtherRead
+                ||| UnixFileMode.OtherExecute
+              )
 
-            let! _ = command.ExecuteAsync token
-
-            args.Logger.LogInformation(
-              "Successfully set executable permissions for {esbuildBinaryPath}",
-              esbuildBinaryPath
-            )
+              args.Logger.LogInformation(
+                "Successfully set executable permissions for {esbuildBinaryPath}",
+                esbuildBinaryPath
+              )
+            with ex ->
+              args.Logger.LogWarning(
+                "Failed to set executable permissions for {esbuildBinaryPath}: {Error}",
+                esbuildBinaryPath,
+                ex.Message
+              )
 
             args.Logger.LogInformation
-              "This setup should happen once per machine. If you see it often please report a bug."
+              "This setup should happen once per esbuild version. If you see it often please report a bug."
 
             return ()
           else
             args.Logger.LogInformation
-              "This setup should happen once per machine. If you see it often please report a bug."
+              "This setup should happen once per esbuild version. If you see it often please report a bug."
 
             return ()
         }
 
         member _.SetupFable() = cancellableTask {
-          let! token = CancellableTask.getCancellationToken()
+          let! fableExists = args.PlatformOps.IsFableAvailable()
 
-          let ext = if args.PlatformOps.IsWindows() then ".exe" else ""
-          let dotnet = $"dotnet{ext}"
-
-          let dotnetCmd = Cli.Wrap(dotnet)
-
-
-          let! fableExists =
-            dotnetCmd
-              .WithArguments([ "fable"; "--version" ])
-              .WithValidation(CommandResultValidation.None)
-              .ExecuteBufferedAsync(token)
-
-          if fableExists.ExitCode = 0 then
+          if fableExists then
             args.Logger.LogInformation
               "Fable is already installed, skipping setup."
 
@@ -443,19 +433,12 @@ module FileSystem =
 
           args.Logger.LogInformation "Fable is not installed, installing..."
 
-          let! installCmd =
-            dotnetCmd
-              .WithArguments(
-                [ "tool"; "install"; "fable"; "--create-manifest-if-needed" ]
-              )
-              .WithValidation(CommandResultValidation.None)
-              .ExecuteBufferedAsync
-              token
+          let! installResult = args.PlatformOps.InstallDotnetTool("fable")
 
-          if installCmd.ExitCode <> 0 then
+          if installResult.ExitCode <> 0 then
             args.Logger.LogError(
               "Failed to install Fable: {Error}",
-              installCmd.StandardError
+              installResult.StandardError
             )
 
             return ()
@@ -637,9 +620,8 @@ module FileSystem =
           let content = this.DotEnvContents |> AVal.force
 
           if Map.isEmpty content then
-            args.Logger.LogInformation(
+            args.Logger.LogInformation
               "No environment variables to emit, skipping."
-            )
           else
             args.Logger.LogInformation(
               "Emitting environment variables to {Path}",

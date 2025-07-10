@@ -89,7 +89,7 @@ module RequestHandler =
 
   let Create(args: RequestHandlerArgs) : RequestHandler =
     { new RequestHandler with
-        member _.DownloadEsbuild(version) =
+        member _.DownloadEsbuild version =
           downloadEsbuild
             args.Logger
             args.PlatformOps
