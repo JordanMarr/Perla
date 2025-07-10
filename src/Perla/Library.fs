@@ -4,39 +4,7 @@ open Spectre.Console.Rendering
 
 open FSharp.UMX
 open Perla.Units
-open Perla.PackageManager.Types
 open FsToolkit.ErrorHandling
-
-module private ImportMap =
-
-  let private RemoveResolutionsFromMap
-    (current: Map<string, string>)
-    (import: string<BareImport>)
-    (_: string<ResolutionUrl>)
-    =
-    current |> Map.remove(UMX.untag import)
-
-  let private AddResolutionsToMap
-    (current: Map<string, string>)
-    (import: string<BareImport>)
-    (resolution: string<ResolutionUrl>)
-    =
-    current |> Map.add (UMX.untag import) (UMX.untag resolution)
-
-  [<RequireQualifiedAccess>]
-  type MapUpdate =
-    | Add of Map<string<BareImport>, string<ResolutionUrl>>
-    | Remove of Map<string<BareImport>, string<ResolutionUrl>>
-
-  let ModifyMap(map: ImportMap, operation: MapUpdate) =
-    let imports =
-      match operation with
-      | MapUpdate.Add resolutions ->
-        Map.fold AddResolutionsToMap map.imports resolutions
-      | MapUpdate.Remove resolutions ->
-        Map.fold RemoveResolutionsFromMap map.imports resolutions
-
-    { map with imports = imports }
 
 [<AutoOpen>]
 module Lib =
@@ -44,7 +12,6 @@ module Lib =
   open Perla.Types
   open Spectre.Console
   open System.Text.RegularExpressions
-  open ImportMap
 
   [<return: Struct>]
   let internal (|ParseRegex|_|) (regex: Regex) str =
@@ -54,27 +21,6 @@ module Lib =
       ValueSome(List.tail [ for x in m.Groups -> x.Value ])
     else
       ValueNone
-
-  let ExtractDependencyInfoFromUrl url =
-
-    match url with
-    | ParseRegex (Regex(@"https://cdn.skypack.dev/pin/(@?[^@]+)@v([\d.]+)(-?\w+(?!\w+)[\d.]?[\d+]+)?")) [ name
-                                                                                                          version
-                                                                                                          preview ] ->
-      ValueSome(Provider.Skypack, name, $"{version}{preview}")
-    | ParseRegex (Regex(@"https://cdn.jsdelivr.net/npm/(@?[^@]+)@([\d.]+)(-?[-]\w+[\d.]?[\d+]+)?")) [ name
-                                                                                                      version
-                                                                                                      preview ] ->
-      ValueSome(Provider.Jsdelivr, name, $"{version}{preview}")
-    | ParseRegex (Regex(@"https://ga.jspm.io/npm:(@?[^@]+)@([\d.]+)(-?[-]\w+[\d.]?[\d+]+)?")) [ name
-                                                                                                version
-                                                                                                preview ] ->
-      ValueSome(Provider.Jspm, name, $"{version}{preview}")
-    | ParseRegex (Regex(@"https://unpkg.com/(@?[^@]+)@([\d.]+)(-?[-]\w+[\d.]?[\d+]+)?")) [ name
-                                                                                           version
-                                                                                           preview ] ->
-      ValueSome(Provider.Unpkg, name, $"{version}{preview}")
-    | _ -> ValueNone
 
   let parseFullRepositoryName(value: string option) = voption {
     let! name = value
@@ -98,8 +44,8 @@ module Lib =
     | [| template |] -> None, template, None
     | _ -> None, templateName, None
 
-  let dependencyTable(deps: Dependency seq, title: string) =
-    let table = Table().AddColumns([| "Name"; "Version"; "Alias" |])
+  let dependencyTable(deps: PkgDependency Set, title: string) =
+    let table = Table().AddColumns([| "Name"; "Version" |])
 
     table.Title <- TableTitle(title)
 
@@ -107,12 +53,7 @@ module Lib =
       column.Alignment <- Justify.Left
 
     for dependency in deps do
-      table.AddRow(
-        dependency.name,
-        defaultArg dependency.version "",
-        defaultArg dependency.alias ""
-      )
-      |> ignore
+      table.AddRow(dependency.package, UMX.untag dependency.version) |> ignore
 
     table
 
@@ -122,39 +63,43 @@ module Lib =
     else
       Package package
 
-  let parsePackageName(name: string) =
+  let parsePackageName(name: string) : string * string * string option =
+    // Handles cases like:
+    // solid-js@1.9.7
+    // solid-js/web
+    // solid-js/web@1.9.7
+    // @scope/pkg@1.2.3
+    // @scope/pkg/deep@1.2.3
+    let basePkg, fullImport, version =
+      let namePart, version =
+        let atIdx = name.LastIndexOf("@")
 
-    let getVersion parts =
-
-      let version =
-        let version = parts |> Seq.tryLast |> Option.defaultValue ""
-
-        if String.IsNullOrWhiteSpace version then
-          None
+        if atIdx > 0 && not(name.StartsWith("@")) then
+          let before = name.Substring(0, atIdx)
+          let after = name.Substring(atIdx + 1)
+          before, Some after
         else
-          Some version
+          name, None
 
-      version
+      let parts = namePart.Split('/')
 
-    match name with
-    | ScopedPackage name ->
-      // check if the user is looking to install a particular version
-      // i.e. package@5.0.0
-      if name.Contains("@") then
-        let parts = name.Split("@")
-        let version = getVersion parts
+      if parts.Length > 1 then
+        // deep import
+        let basePkg =
+          if namePart.StartsWith("@") then
+            // scoped: @scope/pkg/deep
+            if parts.Length >= 2 then
+              $"{parts[0]}/{parts[1]}"
+            else
+              namePart
+          else
+            parts[0]
 
-        $"@{parts[0]}", version
+        basePkg, namePart, version
       else
-        $"@{name}", None
-    | Package name ->
-      if name.Contains("@") then
-        let parts = name.Split("@")
+        namePart, namePart, version
 
-        let version = getVersion parts
-        parts[0], version
-      else
-        name, None
+    basePkg, fullImport, version
 
   let (|Log|Debug|Info|Err|Warning|Clear|) level =
     match level with
@@ -251,8 +196,6 @@ module Lib =
     member this.Item
       with get (value: string) =
         match value.ToLowerInvariant() with
-        | "esbuildpath" ->
-          UMX.untag this.esBuildPath |> Text :> IRenderable |> Some
         | "version" -> UMX.untag this.version |> Text :> IRenderable |> Some
         | "ecmaversion" ->
           UMX.untag this.ecmaVersion |> Text :> IRenderable |> Some
@@ -288,7 +231,6 @@ module Lib =
       let tree = Tree("esbuild")
 
       tree.AddNodes(
-        $"esbuildPath -> {this.esBuildPath}",
         $"version -> {this.version}",
         $"ecmaVersion -> {this.ecmaVersion}",
         $"minify -> {this.minify}",
@@ -395,9 +337,12 @@ module Lib =
       with get (value: string): IRenderable option =
         match value.ToLowerInvariant() with
         | "index" -> Text(UMX.untag this.index) :> IRenderable |> Some
-        | "runconfiguration" ->
-          Text(this.runConfiguration.AsString) :> IRenderable |> Some
-        | "provider" -> Text(this.provider.AsString) :> IRenderable |> Some
+        | "provider" ->
+          Text(this.provider |> PkgManager.DownloadProvider.asString)
+          :> IRenderable
+          |> Some
+        | "uselocalpkgs" ->
+          $"{this.useLocalPkgs}" |> Text :> IRenderable |> Some
         | "plugins" ->
           this.plugins
           |> Seq.fold (fun current next -> $"{next};{current}") ""
@@ -420,17 +365,7 @@ module Lib =
         | "envpath" -> $"{this.envPath}" |> Text :> IRenderable |> Some
         | "dependencies" ->
           this.dependencies
-          |> Seq.fold
-            (fun current next -> $"{next.AsVersionedString};{current}")
-            ""
-          |> Text
-          :> IRenderable
-          |> Some
-        | "devdependencies" ->
-          this.devDependencies
-          |> Seq.fold
-            (fun current next -> $"{next.AsVersionedString};{current}")
-            ""
+          |> Seq.fold (fun current next -> $"{next.version};{current}") ""
           |> Text
           :> IRenderable
           |> Some
@@ -456,24 +391,3 @@ module Lib =
         match testing.ToLowerInvariant() with
         | "testing" -> this.testing[(fable, node)]
         | _ -> None
-
-  type ImportMap with
-
-    member this.RemoveResolutions
-      (resolutions: Map<string<BareImport>, string<ResolutionUrl>>)
-      =
-      ModifyMap(this, MapUpdate.Remove resolutions)
-
-    member this.AddResolutions
-      (resolutions: Map<string<BareImport>, string<ResolutionUrl>>)
-      =
-      ModifyMap(this, MapUpdate.Add resolutions)
-
-    member this.AddEnvResolution(config: PerlaConfig) =
-      if config.enableEnv then
-        this.AddResolutions(
-          [ Constants.EnvBareImport |> UMX.tag, config.envPath |> UMX.cast ]
-          |> Map.ofList
-        )
-      else
-        this

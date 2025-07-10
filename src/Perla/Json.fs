@@ -5,7 +5,6 @@ open System.Text.Json
 open System.Text.Json.Serialization
 open System.Text.Json.Nodes
 
-open Perla.PackageManager.Types
 open Perla.Types
 
 open Perla.Units
@@ -19,8 +18,7 @@ type PerlaConfigSection =
   | Fable of fable: FableConfig option
   | DevServer of devServer: DevServerConfig option
   | Build of build: BuildConfig option
-  | Dependencies of dependencies: Dependency seq option
-  | DevDependencies of devDependencies: Dependency seq option
+  | Dependencies of dependencies: PkgDependency Set option
 
 let DefaultJsonOptions() =
   JsonSerializerOptions(
@@ -80,7 +78,6 @@ module TemplateDecoders =
       repositoryUrl = get.Optional.Field "repositoryUrl" Decode.string
     })
 
-
 module ConfigDecoders =
 
   type DecodedFableConfig = {
@@ -129,8 +126,8 @@ module ConfigDecoders =
 
   type DecodedPerlaConfig = {
     index: string<SystemPath> option
-    runConfiguration: RunConfiguration option
-    provider: Provider option
+    provider: PkgManager.DownloadProvider option
+    useLocalPkgs: bool option
     plugins: string list option
     build: DecodedBuild option
     devServer: DecodedDevServer option
@@ -141,8 +138,7 @@ module ConfigDecoders =
     enableEnv: bool option
     envPath: string<ServerUrl> option
     paths: Map<string<BareImport>, string<ResolutionUrl>> option
-    dependencies: Dependency seq option
-    devDependencies: Dependency seq option
+    dependencies: PkgDependency Set option
   }
 
   let FableFileDecoder: Decoder<DecodedFableConfig> =
@@ -204,13 +200,6 @@ module ConfigDecoders =
       emitEnvFile = get.Optional.Field "emitEnvFile" Decode.bool
     })
 
-  let DependencyDecoder: Decoder<Dependency> =
-    Decode.object(fun get -> {
-      name = get.Required.Field "name" Decode.string
-      version = get.Optional.Field "version" Decode.string
-      alias = get.Optional.Field "alias" Decode.string
-    })
-
   let BrowserDecoder: Decoder<Browser> =
     Decode.string
     |> Decode.andThen(fun value -> Browser.FromString value |> Decode.succeed)
@@ -239,23 +228,12 @@ module ConfigDecoders =
 
   let PerlaDecoder: Decoder<DecodedPerlaConfig> =
     Decode.object(fun get ->
-      let runConfigDecoder =
-        Decode.string
-        |> Decode.andThen (function
-          | "dev"
-          | "development" -> Decode.succeed RunConfiguration.Development
-          | "prod"
-          | "production" -> Decode.succeed RunConfiguration.Production
-          | value -> Decode.fail $"{value} is not a valid run configuration")
-
       let providerDecoder =
         Decode.string
         |> Decode.andThen (function
-          | "jspm" -> Decode.succeed Provider.Jspm
-          | "skypack" -> Decode.succeed Provider.Skypack
-          | "unpkg" -> Decode.succeed Provider.Unpkg
-          | "jsdelivr" -> Decode.succeed Provider.Jsdelivr
-          | "jspm.system" -> Decode.succeed Provider.JspmSystem
+          | "jspm" -> Decode.succeed PkgManager.DownloadProvider.JspmIo
+          | "unpkg" -> Decode.succeed PkgManager.DownloadProvider.Unpkg
+          | "jsdelivr" -> Decode.succeed PkgManager.DownloadProvider.JsDelivr
           | value -> Decode.fail $"{value} is not a valid run configuration")
 
       let directoriesDecoder =
@@ -275,13 +253,23 @@ module ConfigDecoders =
             UMX.tag<BareImport> k, UMX.tag<ResolutionUrl> v)
           |> Map.ofSeq)
 
+      let dependencyDecoder =
+        Decode.dict Decode.string
+        |> Decode.map(fun depMap ->
+          depMap
+          |> Map.toSeq
+          |> Seq.map(fun (k, v) -> {
+            package = k
+            version = UMX.tag<Semver> v
+          })
+          |> Set.ofSeq)
+
       {
         index =
           get.Optional.Field "index" Decode.string
           |> Option.map UMX.tag<SystemPath>
-        runConfiguration =
-          get.Optional.Field "runConfiguration" runConfigDecoder
         provider = get.Optional.Field "provider" providerDecoder
+        useLocalPkgs = get.Optional.Field "offline" Decode.bool
         plugins = get.Optional.Field "plugins" (Decode.list Decode.string)
         build = get.Optional.Field "build" BuildDecoder
         devServer = get.Optional.Field "devServer" DevServerDecoder
@@ -292,12 +280,7 @@ module ConfigDecoders =
         envPath =
           get.Optional.Field "envPath" Decode.string
           |> Option.map UMX.tag<ServerUrl>
-        dependencies =
-          get.Optional.Field "dependencies" (Decode.list DependencyDecoder)
-          |> Option.map Seq.ofList
-        devDependencies =
-          get.Optional.Field "devDependencies" (Decode.list DependencyDecoder)
-          |> Option.map Seq.ofList
+        dependencies = get.Optional.Field "dependencies" dependencyDecoder
         mountDirectories = directoriesDecoder
         paths = pathsDecoder
       })
@@ -403,8 +386,15 @@ type Json =
   static member ToBytes value =
     JsonSerializer.SerializeToUtf8Bytes(value, DefaultJsonOptions())
 
-  static member FromBytes<'T>(value: byte array) =
-    JsonSerializer.Deserialize<'T>(ReadOnlySpan value, DefaultJsonOptions())
+  static member FromBytes<'T when 'T: not struct and 'T: not null>
+    (value: byte array)
+    =
+    match
+      JsonSerializer.Deserialize<'T>(ReadOnlySpan value, DefaultJsonOptions())
+    with
+    | null -> failwith "Deserialization failed"
+    | result -> result
+
 
   static member ToText(value, ?minify) =
     let opts = DefaultJsonOptions()
@@ -413,7 +403,9 @@ type Json =
     JsonSerializer.Serialize(value, opts)
 
   static member ToNode value =
-    JsonSerializer.SerializeToNode(value, DefaultJsonOptions())
+    match JsonSerializer.SerializeToNode(value, DefaultJsonOptions()) with
+    | null -> failwith "Serialization to JsonNode failed"
+    | result -> result
 
   static member FromConfigFile(content: string) =
     Decode.fromString ConfigDecoders.PerlaDecoder content
@@ -461,3 +453,355 @@ type Json =
         return! Decode.fromString decoder value |> Result.map TestRunFinished
       | unknown -> return! Error($"'{unknown}' is not a known event")
     }
+
+
+module PerlaConfig =
+
+  [<RequireQualifiedAccess>]
+  module FromDecoders =
+    open ConfigDecoders
+
+    let GetFable(config: FableConfig option, fable: DecodedFableConfig option) = option {
+      let! decoded = fable
+      let fable = defaultArg config Defaults.FableConfig
+
+      let outDir = decoded.outDir |> Option.orElseWith(fun () -> fable.outDir)
+
+      return {
+        fable with
+            project = defaultArg decoded.project fable.project
+            extension = defaultArg decoded.extension fable.extension
+            sourceMaps = defaultArg decoded.sourceMaps fable.sourceMaps
+            outDir = outDir
+      }
+    }
+
+    let GetDevServer
+      (config: DevServerConfig, devServer: DecodedDevServer option)
+      =
+      option {
+        let! decoded = devServer
+
+        return {
+          config with
+              port = defaultArg decoded.port config.port
+              host = defaultArg decoded.host config.host
+              liveReload = defaultArg decoded.liveReload config.liveReload
+              useSSL = defaultArg decoded.useSSL config.useSSL
+              proxy = defaultArg decoded.proxy config.proxy
+        }
+      }
+
+    let GetBuild(config: BuildConfig, build: DecodedBuild option) = option {
+      let! decoded = build
+
+      return {
+        config with
+            includes = defaultArg decoded.includes config.includes
+            excludes = defaultArg decoded.excludes config.excludes
+            outDir = defaultArg decoded.outDir config.outDir
+            emitEnvFile = defaultArg decoded.emitEnvFile config.emitEnvFile
+      }
+    }
+
+    let GetEsbuild(config: EsbuildConfig, esbuild: DecodedEsbuild option) = option {
+      let! decoded = esbuild
+
+      return {
+        config with
+            version = defaultArg decoded.version config.version
+            ecmaVersion = defaultArg decoded.ecmaVersion config.ecmaVersion
+            minify = defaultArg decoded.minify config.minify
+            injects = defaultArg decoded.injects config.injects
+            externals = defaultArg decoded.externals config.externals
+            fileLoaders = defaultArg decoded.fileLoaders config.fileLoaders
+            jsxAutomatic = defaultArg decoded.jsxAutomatic config.jsxAutomatic
+            jsxImportSource = decoded.jsxImportSource
+      }
+    }
+
+    let GetTesting(config: TestConfig, testing: DecodedTesting option) = option {
+      let! testing = testing
+
+      return {
+        config with
+            browsers = defaultArg testing.browsers config.browsers
+            includes = defaultArg testing.includes config.includes
+            excludes = defaultArg testing.excludes config.excludes
+            watch = defaultArg testing.watch config.watch
+            headless = defaultArg testing.headless config.headless
+            browserMode = defaultArg testing.browserMode config.browserMode
+            fable = GetFable(config.fable, testing.fable)
+      }
+    }
+
+  [<RequireQualifiedAccess>]
+  module FromFields =
+    type DevServerField =
+      | Port of int
+      | Host of string
+      | LiveReload of bool
+      | UseSSL of bool
+      | MinifySources of bool
+
+    [<RequireQualifiedAccess>]
+    type TestingField =
+      | Browsers of Browser seq
+      | Includes of string seq
+      | Excludes of string seq
+      | Watch of bool
+      | Headless of bool
+      | BrowserMode of BrowserMode
+
+    type FableField =
+      | Project of string
+      | Extension of string
+      | SourceMaps of bool
+      | OutDir of bool
+
+    let GetServerFields
+      (config: DevServerConfig, serverOptions: DevServerField seq option)
+      =
+      let getDefaults() = seq {
+        DevServerField.Port config.port
+        DevServerField.Host config.host
+        DevServerField.LiveReload config.liveReload
+        DevServerField.UseSSL config.useSSL
+      }
+
+      let options = serverOptions |> Option.defaultWith getDefaults
+
+      if Seq.isEmpty options then getDefaults() else options
+
+    let GetMinify(serverOptions: DevServerField seq) =
+      serverOptions
+      |> Seq.tryPick(fun opt ->
+        match opt with
+        | MinifySources minify -> Some minify
+        | _ -> None)
+      |> Option.defaultWith(fun _ -> true)
+
+    let GetDevServerOptions
+      (config: DevServerConfig, serverOptions: DevServerField seq)
+      =
+      serverOptions
+      |> Seq.fold
+        (fun current next ->
+          match next with
+          | Port port -> { current with port = port }
+          | Host host -> { current with host = host }
+          | LiveReload liveReload -> { current with liveReload = liveReload }
+          | UseSSL useSSL -> { current with useSSL = useSSL }
+          | _ -> current)
+        config
+
+    let GetTesting
+      (testing: TestConfig, testingOptions: TestingField seq option)
+      =
+      defaultArg testingOptions Seq.empty
+      |> Seq.fold
+        (fun current next ->
+          match next with
+          | TestingField.Browsers value -> { current with browsers = value }
+          | TestingField.Includes value -> { current with includes = value }
+          | TestingField.Excludes value -> { current with excludes = value }
+          | TestingField.Watch value -> { current with watch = value }
+          | TestingField.Headless value -> { current with headless = value }
+          | TestingField.BrowserMode value ->
+              { current with browserMode = value })
+        testing
+
+  let FromString content =
+    let config = Defaults.PerlaConfig
+    let userConfig = Json.FromConfigFile content |> Result.toOption
+    let userFable = userConfig |> Option.map _.fable |> Option.flatten
+    let userDevServer = userConfig |> Option.map _.devServer |> Option.flatten
+    let userBuild = userConfig |> Option.map _.build |> Option.flatten
+    let userEsbuild = userConfig |> Option.map _.esbuild |> Option.flatten
+    let userTesting = userConfig |> Option.map _.testing |> Option.flatten
+    let userPlugins = userConfig |> Option.map _.plugins |> Option.flatten
+    let userIndex = userConfig |> Option.map _.index |> Option.flatten
+    let userProvider = userConfig |> Option.map _.provider |> Option.flatten
+    let userEnvPath = userConfig |> Option.map _.envPath |> Option.flatten
+    let useLocalPkgs = userConfig |> Option.map _.useLocalPkgs |> Option.flatten
+
+    let userDependencies =
+      userConfig |> Option.map _.dependencies |> Option.flatten
+
+    let userMountDirectories =
+      userConfig |> Option.map _.mountDirectories |> Option.flatten
+
+    let userPaths = userConfig |> Option.map _.paths |> Option.flatten
+    let userEnableEnv = userConfig |> Option.map _.enableEnv |> Option.flatten
+
+    let fable = FromDecoders.GetFable(config.fable, userFable)
+
+    let devServer =
+      FromDecoders.GetDevServer(config.devServer, userDevServer)
+      |> Option.defaultValue Defaults.DevServerConfig
+
+    let build =
+      FromDecoders.GetBuild(config.build, userBuild)
+      |> Option.defaultValue Defaults.BuildConfig
+
+    let esbuild =
+      FromDecoders.GetEsbuild(config.esbuild, userEsbuild)
+      |> Option.defaultValue Defaults.EsbuildConfig
+
+    let testing =
+      FromDecoders.GetTesting(config.testing, userTesting)
+      |> Option.defaultValue Defaults.TestConfig
+
+    let plugins =
+      userPlugins |> Option.defaultValue Defaults.PerlaConfig.plugins
+
+    {
+      config with
+          index = defaultArg userIndex config.index
+          provider = defaultArg userProvider config.provider
+          useLocalPkgs = defaultArg useLocalPkgs config.useLocalPkgs
+          mountDirectories =
+            defaultArg userMountDirectories config.mountDirectories
+          enableEnv = defaultArg userEnableEnv config.enableEnv
+          envPath = defaultArg userEnvPath config.envPath
+          paths = defaultArg userPaths config.paths
+          dependencies = defaultArg userDependencies config.dependencies
+          plugins = plugins
+          build = build
+          devServer = devServer
+          fable = fable
+          esbuild = esbuild
+          testing = testing
+    }
+
+  type FableField =
+    | Project of string
+    | Extension of string
+    | SourceMaps of bool
+    | OutDir of bool
+
+  type PerlaWritableField =
+    | Provider of PkgManager.DownloadProvider
+    | Dependencies of PkgDependency Set
+    | UseLocalPkgs of bool
+    | Fable of FableField seq
+    | Paths of Map<string<BareImport>, string<ResolutionUrl>>
+
+  let UpdateFileFields
+    (jsonContents: JsonObject option)
+    (fields: PerlaWritableField seq)
+    =
+
+    let provider =
+      fields
+      |> Seq.tryPick(fun f ->
+        match f with
+        | Provider config -> Some config
+        | _ -> None)
+      |> Option.map PkgManager.DownloadProvider.asString
+
+    let useLocalPkgs =
+      fields
+      |> Seq.tryPick(fun f ->
+        match f with
+        | UseLocalPkgs useLocalPkgs -> Some useLocalPkgs
+        | _ -> None)
+
+    let dependencies =
+      fields
+      |> Seq.tryPick(fun f ->
+        match f with
+        | Dependencies deps -> Some deps
+        | _ -> None)
+
+    let paths =
+      fields
+      |> Seq.tryPick(fun f ->
+        match f with
+        | Paths paths -> Some paths
+        | _ -> None)
+
+    let fable =
+      fields
+      |> Seq.tryPick(fun f ->
+        match f with
+        | Fable fields ->
+          let mutable f = {|
+            project = None
+            extension = None
+            sourceMaps = None
+            outDir = None
+          |}
+
+          for field in fields do
+            match field with
+            | Project path -> f <- {| f with project = Some path |}
+            | Extension ext -> f <- {| f with extension = Some ext |}
+            | SourceMaps sourceMaps ->
+              f <- {|
+                f with
+                    sourceMaps = Some sourceMaps
+              |}
+            | OutDir outDir -> f <- {| f with outDir = Some outDir |}
+
+          Some f
+        | _ -> None)
+
+    let addProvider(content: JsonObject) =
+      match provider with
+      | Some config -> content["provider"] <- Json.ToNode(config)
+      | None -> ()
+
+      content
+
+    let addUseLocalPkgs(content: JsonObject) =
+      match useLocalPkgs with
+      | Some useLocalPkgs ->
+        content["useLocalPkgs"] <- Json.ToNode(useLocalPkgs)
+      | None -> ()
+
+      content
+
+    let addDeps(content: JsonObject) =
+      match dependencies with
+      | Some deps ->
+        let dependencies =
+          deps |> Seq.map(fun dep -> dep.package, dep.version) |> Map.ofSeq
+
+        content["dependencies"] <- Json.ToNode(dependencies)
+      | None -> ()
+
+      content
+
+    let addFable(content: JsonObject) =
+      match fable with
+      | Some fable -> content["fable"] <- Json.ToNode(fable)
+      | None -> ()
+
+      content
+
+    let addPaths(content: JsonObject) =
+      match paths with
+      | Some paths -> content["paths"] <- Json.ToNode(paths)
+      | None -> ()
+
+      content
+
+    let content =
+      match jsonContents with
+      | Some content -> content
+      | None ->
+        (JsonObject.Parse($"""{{ "$schema": "{Constants.JsonSchemaUrl}" }}""")
+         |> nonNull)
+          .AsObject()
+
+    match
+      content["$schema"]
+      |> Option.ofObj
+      |> Option.map(fun schema -> schema.GetValue<string>() |> Option.ofNull)
+      |> Option.flatten
+    with
+    | Some _ -> ()
+    | None -> content["$schema"] <- Json.ToNode(Constants.JsonSchemaUrl)
+
+    content |> addProvider |> addUseLocalPkgs |> addDeps |> addFable |> addPaths

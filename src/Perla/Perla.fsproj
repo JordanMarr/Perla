@@ -1,8 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>perla</ToolCommandName>
@@ -12,9 +12,6 @@
         Perla uses esbuild, import maps, ESModules, and other modern well supported by browser features to enable A
         seamless development experience with less tooling.
     </Description>
-    <Summary>
-        A SPA Dev Server that focuses on removing the node toolchain for frontend developers where possible
-    </Summary>
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="$(AssemblyName).Tests" />
@@ -24,8 +21,8 @@
     <Compile Include="Constants.fs" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
-    <Compile Include="Env.fsi" />
-    <Compile Include="Env.fs" />
+    <Compile Include="PlatformOps.fsi" />
+    <Compile Include="PlatformOps.fs" />
     <Compile Include="Json.fsi" />
     <Compile Include="Json.fs" />
     <Compile Include="FileSystem.fsi" />
@@ -47,18 +44,16 @@
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
     <Compile Include="Testing.fs" />
-    <Compile Include="Dependencies.fsi" />
-    <Compile Include="Dependencies.fs" />
     <Compile Include="Server.fsi" />
     <Compile Include="Server.fs" />
     <Compile Include="Configuration.fsi" />
     <Compile Include="Configuration.fs" />
+    <Compile Include="Orchestration.fsi" />
+    <Compile Include="Orchestration.fs" />
     <Compile Include="Handlers.fsi" />
     <Compile Include="Handlers.fs" />
     <Compile Include="Commands.fsi" />
     <Compile Include="Commands.fs" />
-    <Compile Include="CliMiddleware.fsi" />
-    <Compile Include="CliMiddleware.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -77,31 +72,34 @@
     <None Include="mocha-runner.js">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="offline-tempaltes/**/*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Perla.Logger\Perla.Logger.fsproj" />
-    <ProjectReference Include="..\Perla.PackageManager\Perla.PackageManager.fsproj" />
+    <ProjectReference Include="..\Perla.PkgManager\Perla.PkgManager.fsproj" />
     <ProjectReference Include="..\Perla.Plugins\Perla.Plugins.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.Core" />
     <PackageReference Include="FSharp.Compiler.Service" />
     <PackageReference Include="FSharp.Control.AsyncSeq" />
+    <PackageReference Include="FSharp.Control.TaskSeq" />
     <PackageReference Include="FSharp.Control.Reactive" />
+    <PackageReference Include="FSharp.Data.Adaptive" />
     <PackageReference Include="FSharp.SystemCommandLine" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="FsToolkit.ErrorHandling.IcedTasks" />
     <PackageReference Include="FSharp.UMX" />
     <PackageReference Include="Thoth.Json.Net" />
     <PackageReference Include="Fake.IO.FileSystem" />
     <PackageReference Include="AngleSharp" />
     <PackageReference Include="CliWrap" />
     <PackageReference Include="FsHttp" />
-    <PackageReference Include="SharpZipLib" />
     <PackageReference Include="LiteDB" />
     <PackageReference Include="Scriban" />
-    <PackageReference Include="Zio" />
     <PackageReference Include="Yarp.ReverseProxy" />
-    <PackageReference Include="Hellang.Middleware.SpaFallback" />
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Microsoft.Playwright" />
   </ItemGroup>

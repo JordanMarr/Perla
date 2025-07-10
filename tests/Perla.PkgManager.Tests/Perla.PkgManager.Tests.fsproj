@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net8.0</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsHttp"/>
+    <PackageReference Include="IcedTasks"/>
+    <PackageReference Include="Thoth.Json.Net"/>
+    <PackageReference Include="Serilog"/>
+    <PackageReference Include="Serilog.Sinks.Console"/>
+    <PackageReference Include="Serilog.Extensions.Logging"/>
+    <PackageReference Include="Microsoft.Extensions.Logging"/>
+
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="coverlet.collector" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Perla.Logger\Perla.Logger.fsproj" />
+    <ProjectReference Include="..\..\src\Perla.PkgManager\Perla.PkgManager.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="ProviderTests.fs" />
+    <Compile Include="TypesTests.fs" />
+    <Compile Include="PkgManagerTests.fs" />
+  </ItemGroup>
+
+</Project>

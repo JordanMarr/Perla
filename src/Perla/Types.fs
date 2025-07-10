@@ -34,12 +34,6 @@ module Units =
 module Types =
   open FSharp.UMX
   open Units
-  open Perla.PackageManager.Types
-
-  [<Struct; RequireQualifiedAccess>]
-  type RunConfiguration =
-    | Production
-    | Development
 
   type FableConfig = {
     project: string<SystemPath>
@@ -57,7 +51,6 @@ module Types =
   }
 
   type EsbuildConfig = {
-    esBuildPath: string<SystemPath>
     version: string<Semver>
     ecmaVersion: string
     minify: bool
@@ -66,6 +59,7 @@ module Types =
     fileLoaders: Map<string, string>
     jsxAutomatic: bool
     jsxImportSource: string option
+    aliases: Map<string<BareImport>, string<ResolutionUrl>>
   }
 
   type BuildConfig = {
@@ -75,19 +69,10 @@ module Types =
     emitEnvFile: bool
   }
 
-  type Dependency = {
-    name: string
-    version: string option
-    alias: string option
-  } with
-
-    member internal this.AsVersionedString =
-      let version =
-        match this.version with
-        | Some version -> $"@{version}"
-        | None -> ""
-
-      $"{this.name}{version}"
+  type PkgDependency = {
+    package: string
+    version: string<Semver>
+  }
 
   [<Struct; RequireQualifiedAccess>]
   type Browser =
@@ -114,8 +99,8 @@ module Types =
 
   type PerlaConfig = {
     index: string<SystemPath>
-    runConfiguration: RunConfiguration
-    provider: Provider
+    provider: PkgManager.DownloadProvider
+    useLocalPkgs: bool
     plugins: string list
     build: BuildConfig
     devServer: DevServerConfig
@@ -126,8 +111,7 @@ module Types =
     enableEnv: bool
     envPath: string<ServerUrl>
     paths: Map<string<BareImport>, string<ResolutionUrl>>
-    dependencies: Dependency seq
-    devDependencies: Dependency seq
+    dependencies: PkgDependency Set
   }
 
   type Test = {
@@ -186,49 +170,114 @@ module Types =
   exception FailedToParseNameException of string
 
 
-  type RunConfiguration with
-
-    member this.AsString =
-      match this with
-      | Production -> "production"
-      | Development -> "development"
-
-    static member FromString(value: string) =
-      match value.ToLowerInvariant() with
-      | "production"
-      | "prod" -> Production
-      | "development"
-      | "dev"
-      | _ -> Development
-
   type Browser with
 
     member this.AsString =
       match this with
-      | Browser.Chromium -> "chromium"
-      | Browser.Chrome -> "chrome"
-      | Browser.Edge -> "edge"
-      | Browser.Webkit -> "webkit"
-      | Browser.Firefox -> "firefox"
+      | Chromium -> "chromium"
+      | Chrome -> "chrome"
+      | Edge -> "edge"
+      | Webkit -> "webkit"
+      | Firefox -> "firefox"
 
     static member FromString(value: string) =
       match value.ToLowerInvariant() with
-      | "chromium" -> Browser.Chromium
-      | "chrome" -> Browser.Chrome
-      | "edge" -> Browser.Edge
-      | "webkit" -> Browser.Webkit
-      | "firefox" -> Browser.Firefox
-      | _ -> Browser.Chromium
+      | "chromium" -> Chromium
+      | "chrome" -> Chrome
+      | "edge" -> Edge
+      | "webkit" -> Webkit
+      | "firefox" -> Firefox
+      | _ -> Chromium
 
   type BrowserMode with
 
     member this.AsString =
       match this with
-      | BrowserMode.Parallel -> "parallel"
-      | BrowserMode.Sequential -> "sequential"
+      | Parallel -> "parallel"
+      | Sequential -> "sequential"
 
     static member FromString(value: string) =
       match value.ToLowerInvariant() with
-      | "parallel" -> BrowserMode.Parallel
-      | "sequential" -> BrowserMode.Sequential
-      | _ -> BrowserMode.Parallel
+      | "parallel" -> Parallel
+      | "sequential" -> Sequential
+      | _ -> Parallel
+
+module Defaults =
+  open Types
+  open Units
+  open FSharp.UMX
+
+  let FableConfig: FableConfig = {
+    project = UMX.tag "./src/App.fsproj"
+    extension = UMX.tag ".fs.js"
+    sourceMaps = true
+    outDir = None
+  }
+
+  let DevServerConfig: DevServerConfig = {
+    port = 7331
+    host = "localhost"
+    liveReload = true
+    useSSL = false
+    proxy = Map.empty
+  }
+
+  let EsbuildConfig: EsbuildConfig = {
+    version = UMX.tag Constants.Esbuild_Version
+    ecmaVersion = Constants.Esbuild_Target
+    minify = true
+    injects = Seq.empty
+    externals = Seq.empty
+    fileLoaders =
+      [ ".png", "file"; ".woff", "file"; ".woff2", "file"; ".svg", "file" ]
+      |> Map.ofList
+    jsxAutomatic = false
+    jsxImportSource = None
+    aliases = Map.empty
+  }
+
+  let BuildConfig = {
+    includes = Seq.empty
+    excludes = seq {
+      "./**/obj/**"
+      "./**/bin/**"
+      "./**/*.fs"
+      "./**/*.fsi"
+      "./**/*.fsproj"
+    }
+    outDir = UMX.tag "./dist"
+    emitEnvFile = true
+  }
+
+  let TestConfig = {
+    browsers = [ Browser.Chromium ]
+    includes = [
+      "**/*.test.js"
+      "**/*.spec.js"
+      "**/*.Test.fs.js"
+      "**/*.Spec.fs.js"
+    ]
+    excludes = []
+    watch = false
+    headless = true
+    browserMode = BrowserMode.Parallel
+    fable = None
+  }
+
+  let PerlaConfig = {
+    index = UMX.tag Constants.IndexFile
+    provider = PkgManager.DownloadProvider.JspmIo
+    useLocalPkgs = false
+    plugins = []
+    build = BuildConfig
+    devServer = DevServerConfig
+    esbuild = EsbuildConfig
+    testing = TestConfig
+    fable = None
+    mountDirectories =
+      Map.ofList [ UMX.tag<ServerUrl> "/src", UMX.tag<UserPath> "./src" ]
+    enableEnv = true
+    envPath = UMX.tag Constants.EnvPath
+    paths = Map.empty
+    dependencies = Set.empty
+  }

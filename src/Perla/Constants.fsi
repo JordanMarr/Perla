@@ -40,6 +40,9 @@ val TemplatesDatabase: string = "templates.db"
 val TemplatesDirectory: string = "templates"
 
 [<Literal>]
+val OfflineTemplatesDirectory: string = "offline-templates"
+
+[<Literal>]
 val ImportMapName: string = "perla.json.importmap"
 
 [<Literal>]
@@ -54,12 +57,5 @@ val PerlaEsbuildPluginName: string = "perla-esbuild-plugin"
 [<Literal>]
 val ArtifactsDirectoryname: string = "perla"
 
-module CliDirectives =
-  [<Literal>]
-  val Preview: string = "preview"
-
-  [<Literal>]
-  val NoEsbuildPlugin: string = "no-esbuild-plugin"
-
-  [<Literal>]
-  val CiRun: string = "ci-run"
+[<Literal>]
+val SchemaVersion: string = "2025-07"

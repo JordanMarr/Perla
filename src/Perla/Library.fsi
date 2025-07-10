@@ -7,7 +7,6 @@ open Spectre.Console.Rendering
 open FSharp.UMX
 open Perla.Units
 open Perla.Types
-open Perla.PackageManager.Types
 
 [<AutoOpen>]
 module Lib =
@@ -16,21 +15,18 @@ module Lib =
   val internal (|ParseRegex|_|):
     regex: Regex -> str: string -> string list voption
 
-  val internal ExtractDependencyInfoFromUrl:
-    url: string -> (Provider * string * string) voption
-
   val internal parseFullRepositoryName:
     value: string option -> (string * string * string) voption
 
   val internal getTemplateAndChild:
     templateName: string -> string option * string * string option
 
-  val internal dependencyTable: deps: seq<Dependency> * title: string -> Table
+  val internal dependencyTable: deps: PkgDependency Set * title: string -> Table
 
   val internal (|ScopedPackage|Package|):
     package: string -> Choice<string, string>
 
-  val internal parsePackageName: name: string -> string * string option
+  val internal parsePackageName: name: string -> string * string * string option
 
   val internal (|Log|Debug|Info|Err|Warning|Clear|):
     string -> Choice<unit, unit, unit, unit, unit, unit>
@@ -69,13 +65,3 @@ module Lib =
     member Item: string -> IRenderable option with get
     member Item: (string * string) -> IRenderable option with get
     member Item: (string * string * string) -> IRenderable option with get
-
-  type ImportMap with
-
-    member RemoveResolutions:
-      resolutions: Map<string<BareImport>, string<ResolutionUrl>> -> ImportMap
-
-    member AddResolutions:
-      resolutions: Map<string<BareImport>, string<ResolutionUrl>> -> ImportMap
-
-    member AddEnvResolution: config: PerlaConfig -> ImportMap

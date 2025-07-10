@@ -19,6 +19,16 @@ type PluginLoadError =
   | EvaluationFailed of evalFailure: exn
   | NoPluginFound of pluginName: string
 
+
+module PluginLoadError =
+  let AsString =
+    function
+    | SessionExists -> "A session with this ID already exists."
+    | BoundValueMissing -> "The expected bound value is missing."
+    | AlreadyLoaded name -> $"Plugin '{name}' is already loaded."
+    | EvaluationFailed ex -> $"Evaluation failed: {ex.Message}"
+    | NoPluginFound name -> $"No plugin found with the name '{name}'."
+
 module SessionFactory =
   let inline create stdout stderr =
     FsiEvaluationSession.Create(
@@ -37,115 +47,148 @@ module ScriptReflection =
     | None, Some bound -> Some bound.Value
     | None, None -> None
 
-type SessionCache<'Cache
-  when 'Cache: (static member SessionCache:
-    Lazy<Dictionary<string, FsiEvaluationSession>>)> = 'Cache
+[<Interface>]
+type PluginManager =
+  // Session management
+  abstract CreateSession:
+    id: string -> Result<FsiEvaluationSession, PluginLoadError>
 
-type PluginCache<'Cache
-  when 'Cache: (static member PluginCache: Lazy<Dictionary<string, PluginInfo>>)>
-  = 'Cache
+  abstract GetSession: id: string -> FsiEvaluationSession option
+  abstract RemoveSession: id: string -> bool
+  abstract HasSession: id: string -> bool
 
-type StdoutStderr<'Writer
-  when 'Writer: (static member Stdout: TextWriter)
-  and 'Writer: (static member Stderr: TextWriter)> = 'Writer
+  // Plugin storage
+  abstract AddPlugin: plugin: PluginInfo -> Result<unit, PluginLoadError>
+  abstract GetPlugin: name: string -> PluginInfo option
+  abstract GetAllPlugins: unit -> PluginInfo list
+  abstract HasPlugin: name: string -> bool
+  abstract GetRunnablePlugins: order: string list -> RunnablePlugin list
 
+  // Plugin loading
+  abstract LoadFromCode: plugin: PluginInfo -> Result<unit, PluginLoadError>
+
+  abstract LoadFromText:
+    id: string * content: string * ?cancellationToken: CancellationToken ->
+      Result<PluginInfo, PluginLoadError>
+
+  // Plugin execution
+  abstract RunPlugins:
+    pluginOrder: string list -> fileInput: FileTransform -> Async<FileTransform>
+
+  abstract HasPluginsForExtension: extension: string -> bool
 
 [<RequireQualifiedAccess>]
-module PluginRegistry =
+module PluginManager =
 
-  let inline GetRunnablePlugins<'Cache when PluginCache<'Cache>> order = [
-    for name in order do
-      match 'Cache.PluginCache.Value.TryGetValue(name) with
-      | true, plugin ->
-        match plugin.shouldProcessFile, plugin.transform with
-        | ValueSome st, ValueSome t -> {
-            plugin = plugin
-            shouldTransform = st
-            transform = t
+  let Create(stdout: TextWriter, stderr: TextWriter) =
+    let sessions = Dictionary<string, FsiEvaluationSession>()
+    let plugins = Dictionary<string, PluginInfo>()
+
+    { new PluginManager with
+        // Session management
+        member _.CreateSession(id) =
+          if sessions.ContainsKey(id) then
+            Error SessionExists
+          else
+            let session = SessionFactory.create stdout stderr
+            sessions.Add(id, session)
+            Ok session
+
+        member _.GetSession(id) =
+          match sessions.TryGetValue(id) with
+          | true, session -> Some session
+          | false, _ -> None
+
+        member _.RemoveSession(id) = sessions.Remove(id)
+
+        member _.HasSession(id) = sessions.ContainsKey(id)
+
+        // Plugin storage
+        member _.AddPlugin(plugin) =
+          if plugins.TryAdd(plugin.name, plugin) then
+            Ok()
+          else
+            Error(AlreadyLoaded plugin.name)
+
+        member _.GetPlugin(name) =
+          match plugins.TryGetValue(name) with
+          | true, plugin -> Some plugin
+          | false, _ -> None
+
+        member _.GetAllPlugins() = plugins.Values |> Seq.toList
+
+        member _.HasPlugin(name) = plugins.ContainsKey(name)
+
+        member _.GetRunnablePlugins(order) = [
+          for name in order do
+            match plugins.TryGetValue(name) with
+            | true, plugin ->
+              match plugin.shouldProcessFile, plugin.transform with
+              | ValueSome st, ValueSome t -> {
+                  plugin = plugin
+                  shouldTransform = st
+                  transform = t
+                }
+              | _ -> ()
+            | false, _ -> ()
+        ]
+
+        // Plugin loading
+        member this.LoadFromCode(plugin) = this.AddPlugin(plugin)
+
+        member this.LoadFromText(id, content, ?cancellationToken) = result {
+          do! this.HasSession(id) |> Result.requireFalse SessionExists
+
+          let! session = this.CreateSession(id)
+
+          let evaluation, _ =
+            session.EvalInteractionNonThrowing(
+              content,
+              ?cancellationToken = cancellationToken
+            )
+
+          let! foundValue = result {
+            let! result =
+              evaluation |> Result.ofChoice |> Result.mapError EvaluationFailed
+
+            match result with
+            | Some result -> return result
+            | None ->
+              return!
+                ScriptReflection.findPlugin session
+                |> Result.requireSome BoundValueMissing
           }
-        | _ -> ()
-      | false, _ -> ()
-  ]
 
-  let inline GetPluginList<'Cache when PluginCache<'Cache>>() =
-    'Cache.PluginCache.Value.Values |> Seq.toList
-
-  let inline RunPlugins<'Cache when PluginCache<'Cache>>
-    (pluginOrder: string list)
-    fileInput
-    =
-    async {
-      let plugins = GetRunnablePlugins<'Cache> pluginOrder
-
-      let inline folder result next =
-        cancellableValueTask {
-          match next.shouldTransform result.extension with
-          | true -> return! next.transform result
-          | false -> return result
+          if foundValue.ReflectionType = typeof<PluginInfo> then
+            let plugin: PluginInfo = unbox foundValue.ReflectionValue
+            do! this.AddPlugin(plugin)
+            return plugin
+          else
+            return! Error(NoPluginFound id)
         }
-        |> Async.AwaitCancellableValueTask
 
-      return! plugins |> AsyncSeq.ofSeq |> AsyncSeq.foldAsync folder fileInput
-    }
+        // Plugin execution
+        member this.RunPlugins (pluginOrder) (fileInput) = async {
+          let plugins = this.GetRunnablePlugins(pluginOrder)
 
-  let inline HasPluginsForExtension<'Cache when PluginCache<'Cache>> extension =
-    let list = GetPluginList<'Cache>()
+          let inline folder result next =
+            cancellableValueTask {
+              match next.shouldTransform result.extension with
+              | true -> return! next.transform result
+              | false -> return result
+            }
+            |> Async.AwaitCancellableValueTask
 
-    list
-    |> List.exists(fun plugin ->
-
-      match plugin.shouldProcessFile with
-      | ValueSome f -> f extension
-      | _ -> false)
-
-  let inline LoadFromCode<'Cache when PluginCache<'Cache>>(plugin: PluginInfo) =
-    if 'Cache.PluginCache.Value.TryAdd(plugin.name, plugin) then
-      Ok()
-    else
-      Error(AlreadyLoaded plugin.name)
-
-[<Class; Sealed>]
-type PluginRegistry =
-
-  static member inline LoadFromText<'Cache, 'Writer
-    when PluginCache<'Cache> and SessionCache<'Cache> and StdoutStderr<'Writer>>
-    (id, content, cancellationToken)
-    =
-    result {
-      let mutable discard: FsiEvaluationSession = Unchecked.defaultof<_>
-      let sessionCache = 'Cache.SessionCache
-
-      do!
-        sessionCache.Value.TryGetValue(id, &discard)
-        |> Result.requireFalse SessionExists
-
-      let plugins = 'Cache.PluginCache
-
-      let session = SessionFactory.create 'Writer.Stdout 'Writer.Stderr
-
-      let evaluation, _ =
-        session.EvalInteractionNonThrowing(
-          content,
-          ?cancellationToken = cancellationToken
-        )
-
-      let! foundValue = result {
-        let! result =
-          evaluation |> Result.ofChoice |> Result.mapError EvaluationFailed
-
-        match result with
-        | Some result -> return result
-        | None ->
           return!
-            ScriptReflection.findPlugin session
-            |> Result.requireSome BoundValueMissing
-      }
+            plugins |> AsyncSeq.ofSeq |> AsyncSeq.foldAsync folder fileInput
+        }
 
-      if foundValue.ReflectionType = typeof<PluginInfo> then
-        sessionCache.Value.Add(id, session)
-        let plugin: PluginInfo = unbox foundValue.ReflectionValue
-        plugins.Value.Add(id, plugin)
-        return plugin
-      else
-        return! Error(NoPluginFound id)
+        member this.HasPluginsForExtension(extension) =
+          let allPlugins = this.GetAllPlugins()
+
+          allPlugins
+          |> List.exists(fun plugin ->
+            match plugin.shouldProcessFile with
+            | ValueSome f -> f extension
+            | _ -> false)
     }

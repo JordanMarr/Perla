@@ -1,13 +1,11 @@
 ﻿namespace Perla.Handlers
 
-open System.Threading
-open System.Threading.Tasks
-
-open FSharp.UMX
-
-open Perla.Units
+open IcedTasks
+open FsToolkit.ErrorHandling
+open Perla
 open Perla.Types
-open Perla.PackageManager.Types
+open Perla.Extensibility
+
 
 [<Struct; RequireQualifiedAccess>]
 type ListFormat =
@@ -17,42 +15,31 @@ type ListFormat =
 type ServeOptions = {
   port: int option
   host: string option
-  mode: RunConfiguration option
   ssl: bool option
 }
 
-type BuildOptions = {
-  mode: RunConfiguration option
-  enablePreview: bool
-  enablePreloads: bool
-  rebuildImportMap: bool
-}
+type BuildOptions = { enablePreview: bool }
 
 type SetupOptions = {
   installTemplates: bool
   skipPrompts: bool
 }
 
-type SearchOptions = { package: string; page: int }
-
-type ShowPackageOptions = { package: string }
-
 type ListTemplatesOptions = { format: ListFormat }
 
 type AddPackageOptions = {
   package: string
   version: string option
-  source: Provider option
-  mode: RunConfiguration option
-  alias: string option
 }
 
-type RemovePackageOptions = {
-  package: string
-  alias: string option
-}
+type RemovePackageOptions = { package: string }
 
 type ListPackagesOptions = { format: ListFormat }
+
+type InstallOptions = {
+  offline: bool
+  source: PkgManager.DownloadProvider voption
+}
 
 [<RequireQualifiedAccess; Struct>]
 type RunTemplateOperation =
@@ -70,11 +57,7 @@ type ProjectOptions = {
   projectName: string
   byId: string option
   byShortName: string option
-}
-
-type RestoreOptions = {
-  source: Provider option
-  mode: RunConfiguration option
+  skipPrompts: bool
 }
 
 type TestingOptions = {
@@ -86,61 +69,45 @@ type TestingOptions = {
   browserMode: BrowserMode option
 }
 
-type DescribeOptions = {
-  properties: string[] option
-  current: bool
-}
+type DescribeOptions = { properties: string[]; current: bool }
 
-[<Struct>]
-type PathOperation =
-  | AddOrUpdate of
-    addImport: string<BareImport> *
-    addPath: string<ResolutionUrl>
-  | Remove of removeImport: string
-
-type PathsOptions = { operation: PathOperation }
 
 module Handlers =
 
-  val runSetup:
-    options: SetupOptions * cancellationToken: CancellationToken -> Task<int>
-
   val runNew:
-    options: ProjectOptions * cancellationToken: CancellationToken -> Task<int>
+    container: AppContainer -> options: ProjectOptions -> CancellableTask<int>
 
   val runTemplate:
-    options: TemplateRepositoryOptions * cancellationToken: CancellationToken ->
-      Task<int>
+    container: AppContainer ->
+    options: TemplateRepositoryOptions ->
+      CancellableTask<int>
 
   val runBuild:
-    options: BuildOptions * cancellationToken: CancellationToken -> Task<int>
+    container: AppContainer -> options: BuildOptions -> CancellableTask<int>
 
   val runServe:
-    options: ServeOptions * cancellationToken: CancellationToken -> Task<int>
+    container: AppContainer -> options: ServeOptions -> CancellableTask<int>
 
   val runTesting:
-    options: TestingOptions * cancellationToken: CancellationToken -> Task<int>
+    container: AppContainer -> options: TestingOptions -> CancellableTask<int>
 
-  val runSearchPackage:
-    options: SearchOptions * cancellationToken: CancellationToken -> Task<int>
-
-  val runShowPackage:
-    options: ShowPackageOptions * cancellationToken: CancellationToken ->
-      Task<int>
-
-  val runAddResolution: options: PathsOptions -> Task<int>
+  val runInstall:
+    container: AppContainer -> options: InstallOptions -> CancellableTask<int>
 
   val runAddPackage:
-    options: AddPackageOptions * cancellationToken: CancellationToken ->
-      Task<int>
+    container: AppContainer ->
+    options: AddPackageOptions ->
+      CancellableTask<int>
 
   val runRemovePackage:
-    options: RemovePackageOptions * cancellationToken: CancellationToken ->
-      Task<int>
+    container: AppContainer ->
+    options: RemovePackageOptions ->
+      CancellableTask<int>
 
-  val runListPackages: options: ListPackagesOptions -> Task<int>
+  val runListPackages:
+    container: AppContainer ->
+    options: ListPackagesOptions ->
+      CancellableTask<int>
 
-  val runRestoreImportMap:
-    options: RestoreOptions * cancellationToken: CancellationToken -> Task<int>
-
-  val runDescribePerla: options: DescribeOptions -> Task<int>
+  val runDescribePerla:
+    container: AppContainer -> options: DescribeOptions -> CancellableTask<int>

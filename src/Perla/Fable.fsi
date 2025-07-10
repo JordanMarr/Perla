@@ -1,12 +1,11 @@
 ﻿namespace Perla.Fable
 
-open System
-open System.Threading
-open System.Threading.Tasks
-open System.Runtime.InteropServices
+open System.Collections.Generic
+open Microsoft.Extensions.Logging
 
-open CliWrap
+open IcedTasks
 
+open Perla
 open Perla.Types
 
 [<RequireQualifiedAccess>]
@@ -15,24 +14,20 @@ type FableEvent =
   | ErrLog of string
   | WaitingForChanges
 
+[<Interface>]
+type FableService =
 
-[<Class>]
-type Fable =
+  abstract member Run: FableConfig -> CancellableTask<unit>
 
-  /// Use this method to run a one-off fable execution
-  static member Start:
-    config: FableConfig *
-    [<Optional>] ?stdout: (string -> unit) *
-    [<Optional>] ?stderr: (string -> unit) *
-    [<Optional>] ?cancellationToken: CancellationToken ->
-      Task<CommandResult>
+  abstract member Monitor: config: FableConfig -> IAsyncEnumerable<FableEvent>
 
-  /// Use this method to monitor fable stdout/stderr logs
-  /// and get notice when a compilation finishes
-  static member Observe:
-    config: FableConfig *
-    [<Optional>] ?isWatch: bool *
-    [<Optional>] ?stdout: (string -> unit) *
-    [<Optional>] ?stderr: (string -> unit) *
-    [<Optional>] ?cancellationToken: CancellationToken ->
-      IObservable<FableEvent>
+  abstract member IsPresent: unit -> CancellableTask<bool>
+
+type FableArgs = {
+  Platform: PlatformOps
+  Logger: ILogger
+}
+
+module Fable =
+
+  val Create: args: FableArgs -> FableService

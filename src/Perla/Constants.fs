@@ -43,6 +43,9 @@ let TemplatesDatabase = "templates.db"
 let TemplatesDirectory = "templates"
 
 [<Literal>]
+let OfflineTemplatesDirectory = "offline-templates"
+
+[<Literal>]
 let ImportMapName = "perla.json.importmap"
 
 [<Literal>]
@@ -52,16 +55,8 @@ let TemplatingScriptName = "templating.fsx"
 let JsonSchemaUrl =
   "https://raw.githubusercontent.com/AngelMunoz/Perla/main/perla.schema.json"
 
+[<Literal>]
+let SchemaVersion = "2025-07"
 
 [<Literal>]
 let PerlaEsbuildPluginName = "perla-esbuild-plugin"
-
-module CliDirectives =
-  [<Literal>]
-  let Preview: string = "preview"
-
-  [<Literal>]
-  let NoEsbuildPlugin: string = "no-esbuild-plugin"
-
-  [<Literal>]
-  let CiRun: string = "ci-run"

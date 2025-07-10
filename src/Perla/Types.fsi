@@ -1,6 +1,7 @@
 namespace Perla
 
 open System
+open Perla.PkgManager
 
 module Units =
   [<Measure>]
@@ -35,14 +36,6 @@ module Units =
 module Types =
   open FSharp.UMX
   open Units
-  open Perla.PackageManager.Types
-
-  [<Struct; RequireQualifiedAccess>]
-  type RunConfiguration =
-    | Production
-    | Development
-
-    member AsString: string
 
   type FableConfig = {
     project: string<SystemPath>
@@ -60,7 +53,6 @@ module Types =
   }
 
   type EsbuildConfig = {
-    esBuildPath: string<SystemPath>
     version: string<Semver>
     ecmaVersion: string
     minify: bool
@@ -69,6 +61,7 @@ module Types =
     fileLoaders: Map<string, string>
     jsxAutomatic: bool
     jsxImportSource: string option
+    aliases: Map<string<BareImport>, string<ResolutionUrl>>
   }
 
   type BuildConfig = {
@@ -78,13 +71,10 @@ module Types =
     emitEnvFile: bool
   }
 
-  type Dependency = {
-    name: string
-    version: string option
-    alias: string option
-  } with
-
-    member internal AsVersionedString: string
+  type PkgDependency = {
+    package: string
+    version: string<Semver>
+  }
 
   [<Struct; RequireQualifiedAccess>]
   type Browser =
@@ -117,8 +107,8 @@ module Types =
 
   type PerlaConfig = {
     index: string<SystemPath>
-    runConfiguration: RunConfiguration
-    provider: Provider
+    provider: PkgManager.DownloadProvider
+    useLocalPkgs: bool
     plugins: string list
     build: BuildConfig
     devServer: DevServerConfig
@@ -129,8 +119,7 @@ module Types =
     enableEnv: bool
     envPath: string<ServerUrl>
     paths: Map<string<BareImport>, string<ResolutionUrl>>
-    dependencies: Dependency seq
-    devDependencies: Dependency seq
+    dependencies: PkgDependency Set
   }
 
   type Test = {
@@ -188,6 +177,12 @@ module Types =
   exception HeaderNotFoundException of string
   exception FailedToParseNameException of string
 
-  type RunConfiguration with
+module Defaults =
+  open Types
 
-    static member FromString: value: string -> RunConfiguration
+  val FableConfig: FableConfig
+  val DevServerConfig: DevServerConfig
+  val EsbuildConfig: EsbuildConfig
+  val BuildConfig: BuildConfig
+  val TestConfig: TestConfig
+  val PerlaConfig: PerlaConfig
