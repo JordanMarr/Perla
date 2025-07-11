@@ -231,7 +231,8 @@ module ConfigDecoders =
       let providerDecoder =
         Decode.string
         |> Decode.andThen (function
-          | "jspm" -> Decode.succeed PkgManager.DownloadProvider.JspmIo
+          | "jspm"
+          | "jspm.io" -> Decode.succeed PkgManager.DownloadProvider.JspmIo
           | "unpkg" -> Decode.succeed PkgManager.DownloadProvider.Unpkg
           | "jsdelivr" -> Decode.succeed PkgManager.DownloadProvider.JsDelivr
           | value -> Decode.fail $"{value} is not a valid run configuration")
@@ -269,7 +270,7 @@ module ConfigDecoders =
           get.Optional.Field "index" Decode.string
           |> Option.map UMX.tag<SystemPath>
         provider = get.Optional.Field "provider" providerDecoder
-        useLocalPkgs = get.Optional.Field "offline" Decode.bool
+        useLocalPkgs = get.Optional.Field "useLocalPkgs" Decode.bool
         plugins = get.Optional.Field "plugins" (Decode.list Decode.string)
         build = get.Optional.Field "build" BuildDecoder
         devServer = get.Optional.Field "devServer" DevServerDecoder
@@ -399,7 +400,7 @@ type Json =
   static member ToText(value, ?minify) =
     let opts = DefaultJsonOptions()
     let minify = defaultArg minify false
-    opts.WriteIndented <- minify
+    opts.WriteIndented <- not minify
     JsonSerializer.Serialize(value, opts)
 
   static member ToNode value =
