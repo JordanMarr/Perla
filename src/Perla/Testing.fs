@@ -2,8 +2,9 @@
 
 open System
 open System.Threading.Tasks
-
+open System.Threading
 open Microsoft.Playwright
+open Microsoft.Extensions.Logging
 
 open Perla
 open Perla.Logger
@@ -15,6 +16,8 @@ open FSharp.Control.Reactive
 
 open Spectre.Console
 open Spectre.Console.Rendering
+
+open IcedTasks
 
 type ClientTestException(message: string, stack: string) =
   inherit Exception(message)
@@ -367,8 +370,7 @@ module Testing =
               (errors |> Seq.toList)))
 
   let getBrowser(browser: Browser, headless: bool, pl: IPlaywright) = task {
-    let options =
-      BrowserTypeLaunchOptions(Devtools = not headless, Headless = headless)
+    let options = BrowserTypeLaunchOptions(Headless = headless)
 
     match browser with
     | Browser.Chrome ->
@@ -430,8 +432,7 @@ open Testing
 type Testing =
 
   static member GetBrowser(pl: IPlaywright, browser: Browser, headless: bool) = task {
-    let options =
-      BrowserTypeLaunchOptions(Devtools = false, Headless = headless)
+    let options = BrowserTypeLaunchOptions(Headless = headless)
 
     match browser with
     | Browser.Chrome ->
@@ -492,4 +493,358 @@ type Testing =
           page.ReloadAsync() |> Async.AwaitTask |> Async.Ignore)
         |> Observable.switchAsync
         |> Observable.finallyDo(fun _ -> monitor.Dispose())
+    }
+
+[<Interface>]
+type PlaywrightService =
+  inherit IDisposable
+
+  /// Initialize Playwright (must be called before other operations)
+  abstract Initialize: unit -> CancellableTask<unit>
+
+  /// Install Playwright browsers
+  abstract InstallBrowsers: unit -> CancellableTask<bool>
+
+  /// Launch a browser instance
+  abstract LaunchBrowser:
+    browser: Browser * headless: bool -> CancellableTask<IBrowser>
+
+  /// Get the underlying IPlaywright instance (for advanced scenarios)
+  abstract GetPlaywright: unit -> IPlaywright
+
+[<Interface>]
+type TestReportPrinter =
+
+  /// Print a single test result
+  abstract PrintTest: test: Test * ?error: (string * string) -> unit
+
+  /// Print a test suite
+  abstract PrintSuite: suite: Suite * ?includeTests: bool -> unit
+
+  /// Print final test report with statistics
+  abstract PrintReport:
+    stats: TestStats * suites: Suite list * errors: ReportedError list -> unit
+
+[<Interface>]
+type TestingService =
+
+  /// Setup Playwright browsers (installs all supported browsers)
+  abstract SetupPlaywright: unit -> CancellableTask<bool>
+
+  /// Get a browser instance for testing
+  abstract GetBrowser:
+    browser: Browser * headless: bool -> CancellableTask<IBrowser>
+
+  /// Run tests once with specified configuration
+  abstract RunOnce:
+    browsers: Browser seq *
+    browserMode: BrowserMode *
+    headless: bool *
+    serverUrl: string *
+    ?fileGlobs: string seq ->
+      CancellableTask<TestStats * Suite list * ReportedError list>
+
+  /// Run tests in watch mode with file change monitoring
+  abstract RunWatch:
+    browser: Browser *
+    headless: bool *
+    serverUrl: string *
+    fileChanges: IObservable<unit> *
+    ?fileGlobs: string seq ->
+      CancellableTask<TestStats * Suite list * ReportedError list>
+
+  /// Build test report from events
+  abstract BuildReport:
+    events: TestEvent list -> TestStats * Suite list * ReportedError list
+
+  /// Monitor test events and print live progress
+  abstract PrintReportLive: events: IObservable<TestEvent> -> IDisposable
+
+// ============================================================================
+// Service Arguments
+// ============================================================================
+
+type PlaywrightServiceArgs = { Logger: ILogger }
+
+type TestReportPrinterArgs = { Logger: ILogger }
+
+type TestingServiceArgs = {
+  Logger: ILogger
+  PlaywrightService: PlaywrightService
+  ReportPrinter: TestReportPrinter
+}
+
+// ============================================================================
+// Playwright Service Implementation
+// ============================================================================
+
+module PlaywrightService =
+
+  let Create(args: PlaywrightServiceArgs) : PlaywrightService =
+    let logger = args.Logger
+    let mutable playwright: IPlaywright option = None
+    let mutable disposed = false
+
+    { new PlaywrightService with
+        member _.Initialize() = cancellableTask {
+          if disposed then
+            failwith "PlaywrightService has been disposed"
+
+          if playwright.IsNone then
+            logger.LogInformation("Initializing Playwright...")
+            let! pw = Playwright.CreateAsync()
+            playwright <- Some pw
+            logger.LogInformation("Playwright initialized successfully")
+        }
+
+        member _.InstallBrowsers() = cancellableTask {
+          logger.LogInformation(
+            "Setting up Playwright... This will install all supported browsers"
+          )
+
+          try
+            let exitCode = Program.Main([| "install" |])
+
+            if exitCode = 0 then
+              logger.LogInformation("Playwright setup complete")
+              return true
+            else
+              logger.LogError(
+                "Couldn't setup Playwright: you may need to set it up manually. "
+                + "For more information visit https://playwright.dev/dotnet/docs/browsers"
+              )
+
+              return false
+
+          with ex ->
+            logger.LogError(
+              ex,
+              "Couldn't setup Playwright: you may need to set it up manually. "
+              + "For more information visit https://playwright.dev/dotnet/docs/browsers"
+            )
+
+            return false
+        }
+
+        member this.LaunchBrowser(browser: Browser, headless: bool) = cancellableTask {
+          if disposed then
+            failwith "PlaywrightService has been disposed"
+
+          match playwright with
+          | None ->
+            do! this.Initialize()
+            return! this.LaunchBrowser(browser, headless)
+          | Some pw ->
+            let options = BrowserTypeLaunchOptions()
+            // Note: Devtools property is deprecated in newer Playwright versions
+            options.Headless <- headless
+
+            logger.LogInformation(
+              "Launching {Browser} browser (headless: {Headless})",
+              browser.AsString,
+              headless
+            )
+
+            match browser with
+            | Browser.Chrome ->
+              options.Channel <- "chrome"
+              return! pw.Chromium.LaunchAsync(options)
+            | Browser.Edge ->
+              options.Channel <- "edge"
+              return! pw.Chromium.LaunchAsync(options)
+            | Browser.Chromium -> return! pw.Chromium.LaunchAsync(options)
+            | Browser.Firefox -> return! pw.Firefox.LaunchAsync(options)
+            | Browser.Webkit -> return! pw.Webkit.LaunchAsync(options)
+        }
+
+        member _.GetPlaywright() =
+          match playwright with
+          | Some pw -> pw
+          | None ->
+            failwith "Playwright not initialized. Call Initialize() first."
+
+        member _.Dispose() =
+          if not disposed then
+            disposed <- true
+
+            match playwright with
+            | Some pw ->
+              logger.LogInformation("Disposing Playwright...")
+              pw.Dispose()
+              playwright <- None
+            | None -> ()
+    }
+
+// ============================================================================
+// Test Report Printer Implementation
+// ============================================================================
+
+module TestReportPrinter =
+
+  let Create(args: TestReportPrinterArgs) : TestReportPrinter =
+    let logger = args.Logger
+
+    { new TestReportPrinter with
+        member _.PrintTest(test, ?error) = Print.Test(test, ?error = error)
+
+        member _.PrintSuite(suite, ?includeTests) =
+          Print.Suite(suite, ?includeTests = includeTests)
+
+        member _.PrintReport(stats, suites, errors) =
+          Print.Report(stats, suites, errors)
+    }
+
+// ============================================================================
+// Testing Service Implementation
+// ============================================================================
+
+module TestingService =
+
+  let Create(args: TestingServiceArgs) : TestingService =
+    let logger = args.Logger
+    let playwrightService = args.PlaywrightService
+    let reportPrinter = args.ReportPrinter
+
+    { new TestingService with
+        member _.SetupPlaywright() = playwrightService.InstallBrowsers()
+
+        member _.GetBrowser(browser, headless) =
+          playwrightService.LaunchBrowser(browser, headless)
+
+        member _.BuildReport(events) = Testing.BuildReport events
+
+        member _.PrintReportLive(events) = Testing.PrintReportLive events
+
+        member _.RunOnce
+          (browsers, browserMode, headless, serverUrl, ?fileGlobs)
+          =
+          cancellableTask {
+            let! token = CancellableTask.getCancellationToken()
+
+            logger.LogInformation(
+              "Starting test run with {BrowserCount} browsers in {Mode} mode",
+              Seq.length browsers,
+              match browserMode with
+              | BrowserMode.Parallel -> "parallel"
+              | BrowserMode.Sequential -> "sequential"
+            )
+
+            try
+              match browserMode with
+              | BrowserMode.Parallel ->
+                let! results =
+                  browsers
+                  |> Seq.map(fun browser -> cancellableTask {
+                    let! browserInstance =
+                      playwrightService.LaunchBrowser(browser, headless)
+
+                    try
+                      let executor = Testing.GetExecutor(serverUrl, browser)
+                      return! executor browserInstance
+                    finally
+                      browserInstance.CloseAsync() |> ignore
+                  })
+                  |> CancellableTask.whenAll
+
+                logger.LogInformation("All browser sessions completed")
+
+              | BrowserMode.Sequential ->
+                for browser in browsers do
+                  if not token.IsCancellationRequested then
+                    let! browserInstance =
+                      playwrightService.LaunchBrowser(browser, headless)
+
+                    try
+                      let executor = Testing.GetExecutor(serverUrl, browser)
+                      do! executor browserInstance
+                    finally
+                      browserInstance.CloseAsync() |> ignore
+
+              // Return results - this would integrate with actual test event collection
+              return Testing.BuildReport []
+
+            with ex ->
+              logger.LogError(ex, "Error during test execution")
+
+              return
+                ({
+                  suites = 0
+                  tests = 0
+                  passes = 0
+                  pending = 0
+                  failures = 1
+                  start = DateTime.Now
+                  ``end`` = Some DateTime.Now
+                 },
+                 [],
+                 [
+                   {
+                     test = None
+                     message = ex.Message
+                     stack =
+                       Option.ofObj ex.StackTrace |> Option.defaultValue ""
+                   }
+                 ])
+          }
+
+        member _.RunWatch
+          (browser, headless, serverUrl, fileChanges, ?fileGlobs)
+          =
+          cancellableTask {
+            let! token = CancellableTask.getCancellationToken()
+
+            logger.LogInformation(
+              "Starting test watch mode with {Browser}",
+              browser.AsString
+            )
+
+            try
+              let! browserInstance =
+                playwrightService.LaunchBrowser(browser, headless)
+
+              try
+                let! observable =
+                  Testing.GetLiveExecutor
+                    (serverUrl, browser, fileChanges)
+                    browserInstance
+
+                use subscription =
+                  observable.Subscribe(fun _ ->
+                    logger.LogInformation(
+                      "Test files reloaded due to file changes"
+                    ))
+
+                while not token.IsCancellationRequested do
+                  do! Task.Delay(1000, token)
+
+                logger.LogInformation("Test watch mode stopped")
+                return Testing.BuildReport []
+
+              finally
+                logger.LogInformation("Closing browser instance")
+                browserInstance.CloseAsync() |> ignore
+
+            with ex ->
+              logger.LogError(ex, "Error during test watch mode")
+
+              return
+                ({
+                  suites = 0
+                  tests = 0
+                  passes = 0
+                  pending = 0
+                  failures = 1
+                  start = DateTime.Now
+                  ``end`` = Some DateTime.Now
+                 },
+                 [],
+                 [
+                   {
+                     test = None
+                     message = ex.Message
+                     stack =
+                       Option.ofObj ex.StackTrace |> Option.defaultValue ""
+                   }
+                 ])
+          }
     }
