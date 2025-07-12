@@ -481,7 +481,6 @@ module Commands =
 
     command "install" {
       description "Installs the project dependencies from the perla.json file"
-      addAlias "i"
       inputs(Input.context, PackageInputs.offline, SharedInputs.source)
       setAction handleCommand
     }
@@ -497,8 +496,6 @@ module Commands =
 
     command "add" {
       description "Adds a package to the project dependencies"
-
-      addAlias "install"
 
       inputs(Input.context, PackageInputs.package, PackageInputs.version)
 
@@ -590,7 +587,7 @@ module Commands =
                container.Db,
                container.Configuration.PerlaConfig,
                container.FableService,
-               [ Warmup.Templates ])
+               [])
               ctx.CancellationToken
 
           match result with
@@ -678,7 +675,7 @@ module Commands =
                container.Db,
                container.Configuration.PerlaConfig,
                container.FableService,
-               [ Warmup.Templates; Warmup.Esbuild; Warmup.Fable ])
+               [ Warmup.Esbuild; Warmup.Fable ])
               ctx.CancellationToken
 
           match result with

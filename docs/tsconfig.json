@@ -1,19 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "useDefineForClassFields": true,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "module": "ES2020",
-    "moduleResolution": "NodeNext",
+    "useDefineForClassFields": true,
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "preserveValueImports": true,
+    "verbatimModuleSyntax": true,
     "allowJs": true,
     "checkJs": true
   },

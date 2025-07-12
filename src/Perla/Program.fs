@@ -68,16 +68,16 @@ let main argv =
     noActionAsync
 
     addCommands [
-      Commands.Template appContainer
-      Commands.Describe appContainer
-      Commands.Build appContainer
-      Commands.Serve appContainer
-      Commands.Test appContainer
+      Commands.NewProject appContainer
+      Commands.Install appContainer
       Commands.AddPackage appContainer
       Commands.RemovePackage appContainer
       Commands.ListPackages appContainer
-      Commands.Install appContainer
-      Commands.NewProject appContainer
+      Commands.Serve appContainer
+      Commands.Build appContainer
+      Commands.Test appContainer
+      Commands.Template appContainer
+      Commands.Describe appContainer
     ]
 
     helpActionAsync
