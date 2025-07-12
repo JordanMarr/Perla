@@ -33,6 +33,7 @@
     <Compile Include="PlatformOps.Tests.fs" />
     <Compile Include="Json.Tests.fs" />
     <Compile Include="FileSystem.Tests.fs" />
+    <Compile Include="VirtualFileSystem.Tests.fs" />
     <Compile Include="Database.Tests.fs" />
     <Compile Include="Extensibility.Tests.fs" />
     <Compile Include="Program.fs" />
