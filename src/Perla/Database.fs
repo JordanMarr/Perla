@@ -170,19 +170,19 @@ module Database =
     match typeof<'Type> with
     | t when t = typeof<PerlaCheck> ->
       let checks = collection :?> ILiteCollection<PerlaCheck>
-      checks.EnsureIndex(fun check -> check.Name, true) |> ignore
-      checks.EnsureIndex(fun check -> check.IsDone) |> ignore
+      checks.EnsureIndex("Name", true) |> ignore
+      checks.EnsureIndex("IsDone", false) |> ignore
     | t when t = typeof<PerlaTemplateRepository> ->
       let repositories = collection :?> ILiteCollection<PerlaTemplateRepository>
-      repositories.EnsureIndex(fun template -> template.Username) |> ignore
-      repositories.EnsureIndex(fun template -> template.Repository) |> ignore
-      repositories.EnsureIndex(fun template -> template.Group) |> ignore
+      repositories.EnsureIndex("Username", false) |> ignore
+      repositories.EnsureIndex("Repository", false) |> ignore
+      repositories.EnsureIndex("Group", false) |> ignore
     | t when t = typeof<TemplateItem> ->
       let templates = collection :?> ILiteCollection<TemplateItem>
-      templates.EnsureIndex(fun template -> template.Parent) |> ignore
-      templates.EnsureIndex(fun template -> template.Group) |> ignore
-      templates.EnsureIndex(fun template -> template.Name) |> ignore
-      templates.EnsureIndex(fun template -> template.ShortName) |> ignore
+      templates.EnsureIndex("Parent", false) |> ignore
+      templates.EnsureIndex("Group", false) |> ignore
+      templates.EnsureIndex("Name", false) |> ignore
+      templates.EnsureIndex("ShortName", false) |> ignore
     | _ -> ()
 
     collection
@@ -299,7 +299,8 @@ module Database =
           let checks = getCollection<PerlaCheck> db
 
           match
-            checks.FindOne(fun check -> check.Name = PerlaCheck.SetupCheckName)
+            checks.FindOne(fun check ->
+              check.Name = PerlaCheck.SetupCheckName && check.IsDone)
             |> Option.ofNull
           with
           | Some found -> found.CheckId
@@ -315,7 +316,8 @@ module Database =
           let checkName = PerlaCheck.TemplatesCheckName
 
           match
-            checks.FindOne(fun check -> check.Name = checkName) |> Option.ofNull
+            checks.FindOne(fun check -> check.Name = checkName && check.IsDone)
+            |> Option.ofNull
           with
           | Some found -> found.CheckId
           | None ->
@@ -416,41 +418,15 @@ module Database =
               |> Option.map List.singleton
               |> Option.defaultValue []
             | QuickAccessSearch.Name name ->
-              templates
-                .Query()
-                .Where(fun template ->
-                  template.Name.Equals(
-                    name,
-                    StringComparison.InvariantCultureIgnoreCase
-                  ))
-                .ToArray()
-              |> Array.toList
+              templates.Find(Query.EQ("Name", BsonValue(name))) |> Seq.toList
             | QuickAccessSearch.Group group ->
-              templates
-                .Query()
-                .Where(fun template ->
-                  template.Group.Equals(
-                    UMX.untag group,
-                    StringComparison.InvariantCultureIgnoreCase
-                  ))
-                .ToArray()
-              |> Array.toList
+              templates.Find(Query.EQ("Group", BsonValue(UMX.untag group)))
+              |> Seq.toList
             | QuickAccessSearch.ShortName shortName ->
-              templates
-                .Query()
-                .Where(fun template ->
-                  template.ShortName.Equals(
-                    shortName,
-                    StringComparison.InvariantCultureIgnoreCase
-                  ))
-                .ToArray()
-              |> Array.toList
+              templates.Find(Query.EQ("ShortName", BsonValue(shortName)))
+              |> Seq.toList
             | QuickAccessSearch.Parent id ->
-              templates
-                .Query()
-                .Where(fun template -> template.Parent = id)
-                .ToArray()
-              |> Array.toList
+              templates.Find(Query.EQ("Parent", BsonValue(id))) |> Seq.toList
 
           results
 
