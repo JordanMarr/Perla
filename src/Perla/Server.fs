@@ -50,7 +50,38 @@ open IcedTasks
 
 open Spectre.Console
 
+[<AutoOpen>]
+module TestableTypes =
 
+  type HttpResponse = {
+    Headers: Map<string, string>
+    Body: string
+    StatusCode: int
+    ContentType: string option
+  }
+
+  type HttpRequest = {
+    Path: string
+    Method: string
+    Query: Map<string, string>
+    Headers: Map<string, string>
+  }
+
+  type ResponseWriter = {
+    WriteText: string -> Task<unit>
+    WriteBytes: byte[] -> Task<unit>
+    SetHeader: string -> string -> unit
+    SetStatusCode: int -> unit
+    SetContentType: string -> unit
+    Flush: unit -> Task<unit>
+  }
+
+  type LiveReloadEvent =
+    | FileReload of path: string * name: string * oldName: string option
+    | HmrReload of path: string * name: string * content: string * url: string
+    | CompileError of error: string option
+
+[<AutoOpen>]
 module Types =
 
   [<RequireQualifiedAccess; Struct>]
@@ -77,12 +108,6 @@ module Types =
       | FullReload data -> $"event:reload\ndata:{data}\n\n"
       | ReplaceCSS data -> $"event:replace-css\ndata:{data}\n\n"
       | CompileError err -> $"event:compile-err\ndata:{err}\n\n"
-
-open Types
-
-// ============================================================================
-// Extensions
-// ============================================================================
 
 [<AutoOpen>]
 module Extensions =
@@ -138,36 +163,20 @@ module Extensions =
       ctx.SetContentType "text/plain; charset=utf-8"
       ctx.WriteStringAsync str
 
-// ============================================================================
-// LiveReload Module
-// ============================================================================
-
 module LiveReload =
 
-  let WriteReloadChange
-    (logger: ILogger)
-    (event: FileChangedEvent, response: HttpResponse)
-    =
-    let data =
-      Json.ToText(
-        {|
-          oldName = event.oldName
-          name = event.name
-        |},
-        false
-      )
-
-    logger.LogInformation(
-      "LiveReload: File Changed: {FileName}",
-      UMX.untag event.name
+  // Pure function to create reload event data
+  let createReloadEventData(event: FileChangedEvent) =
+    Json.ToText(
+      {|
+        oldName = event.oldName
+        name = event.name
+      |},
+      false
     )
 
-    response.WriteAsync $"event:reload\ndata:{data}\n\n"
-
-  let WriteHmrChange
-    (logger: ILogger)
-    (event: FileChangedEvent, transform: FileTransform, response: HttpResponse)
-    =
+  // Pure function to create HMR event data
+  let createHmrEventData (event: FileChangedEvent) (transform: FileTransform) =
     let oldPath =
       event.oldPath
       |> Option.map(fun oldPath ->
@@ -181,30 +190,93 @@ module LiveReload =
 
     let userPath = $"{event.userPath}/{replaced}"
 
-    let data =
-      Json.ToText {|
-        oldName = event.oldName
-        oldPath = oldPath
-        name = replaced
-        url = $"{event.serverPath}/{replaced}"
-        localPath = userPath
-        content = transform.content
-      |}
+    Json.ToText {|
+      oldName = event.oldName
+      oldPath = oldPath
+      name = replaced
+      url = $"{event.serverPath}/{replaced}"
+      localPath = userPath
+      content = transform.content
+    |}
 
-    logger.LogInformation("HMR: CSS File Changed: {UserPath}", userPath)
-    response.WriteAsync $"event:replace-css\ndata:{data}\n\n"
+  // Pure function to create compile error data
+  let createCompileErrorData(error: string option) =
+    Json.ToText({| error = error |}, true)
+
+  // Format live reload event as SSE message
+  let formatReloadEvent(data: string) = $"event:reload\ndata:{data}\n\n"
+
+  // Format HMR event as SSE message
+  let formatHmrEvent(data: string) = $"event:replace-css\ndata:{data}\n\n"
+
+  // Format compile error as SSE message
+  let formatCompileErrorEvent(data: string) =
+    ReloadEvents.CompileError(data).AsString
+
+  // Testable function that creates the reload event
+  let processReloadEvent(event: FileChangedEvent) =
+    let data = createReloadEventData event
+    let message = formatReloadEvent data
+    (data, message)
+
+  // Testable function that creates the HMR event
+  let processHmrEvent (event: FileChangedEvent) (transform: FileTransform) =
+    let data = createHmrEventData event transform
+    let message = formatHmrEvent data
+    let userPath = $"{event.userPath}/{UMX.untag event.name}"
+    (data, message, userPath)
+
+  // Testable function that creates the compile error event
+  let processCompileErrorEvent(error: string option) =
+    let data = createCompileErrorData error
+    let message = formatCompileErrorEvent data
+    (data, message)
+
+  // ASP.NET Core specific implementations using ResponseWriter abstraction
+  let WriteReloadChange
+    (logger: ILogger)
+    (writer: ResponseWriter)
+    (event: FileChangedEvent)
+    =
+    task {
+      let (_, message) = processReloadEvent event
+
+      logger.LogInformation(
+        "LiveReload: File Changed: {FileName}",
+        UMX.untag event.name
+      )
+
+      do! writer.WriteText message
+    }
+
+  let WriteHmrChange
+    (logger: ILogger)
+    (writer: ResponseWriter)
+    (event: FileChangedEvent)
+    (transform: FileTransform)
+    =
+    task {
+      let (_, message, userPath) = processHmrEvent event transform
+      logger.LogInformation("HMR: CSS File Changed: {UserPath}", userPath)
+      do! writer.WriteText message
+    }
 
   let WriteCompileError
     (logger: ILogger)
-    (error: string option, response: HttpResponse)
+    (writer: ResponseWriter)
+    (error: string option)
     =
-    let err = Json.ToText({| error = error |}, true)
-    logger.LogWarning("Compilation Error: {Error}", err.Substring(0, 80))
-    response.WriteAsync(ReloadEvents.CompileError(err).AsString)
+    task {
+      let (data, message) = processCompileErrorEvent error
 
-// ============================================================================
-// Middleware Module
-// ============================================================================
+      logger.LogWarning(
+        "Compilation Error: {Error}",
+        data.Substring(0, min 80 data.Length)
+      )
+
+      do! writer.WriteText message
+    }
+
 
 [<RequireQualifiedAccess>]
 module Middleware =
@@ -213,6 +285,65 @@ module Middleware =
   type RequestedAs =
     | JS
     | Normal
+
+  type FileProcessingResult = {
+    ContentType: string
+    Content: byte[]
+    ShouldProcess: bool
+  }
+
+  // Pure function to transform CSS content to JS
+  let processCssAsJs (content: string) (url: string) =
+    $"""const style=document.createElement('style');style.setAttribute("url", "{url}");
+document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
+
+  // Pure function to transform JSON content to JS
+  let processJsonAsJs(content: string) = $"""export default {content};"""
+
+  // Pure function to determine how to process a file based on mime type and request type
+  let determineFileProcessing
+    (mimeType: string)
+    (requestedAs: RequestedAs)
+    (content: byte[])
+    (reqPath: string)
+    =
+    match mimeType, requestedAs with
+    | "application/json", JS -> {
+        ContentType = MimeTypeNames.DefaultJavaScript
+        Content =
+          processJsonAsJs(Encoding.UTF8.GetString content)
+          |> Encoding.UTF8.GetBytes
+        ShouldProcess = true
+      }
+    | "text/css", JS -> {
+        ContentType = MimeTypeNames.DefaultJavaScript
+        Content =
+          processCssAsJs (Encoding.UTF8.GetString content) reqPath
+          |> Encoding.UTF8.GetBytes
+        ShouldProcess = true
+      }
+    | _, Normal -> {
+        ContentType = mimeType
+        Content = content
+        ShouldProcess = false
+      }
+    | _, JS ->
+        {
+          ContentType = mimeType
+          Content = content
+          ShouldProcess = false
+        }
+
+  let logUnsupportedJsTransformation
+    (logger: ILogger)
+    (mimeType: string)
+    (reqPath: string)
+    =
+    logger.LogWarning(
+      "Requested JS - {MimeType} - {RequestPath} as JS, this file type is not supported as JS, sending default content",
+      mimeType,
+      reqPath
+    )
 
   let processFile
     (logger: ILogger)
@@ -223,35 +354,18 @@ module Middleware =
       requestedAs: RequestedAs,
       content: byte array
     ) : Task =
-    let processCssAsJs(content, url: string) =
-      $"""const style=document.createElement('style');style.setAttribute("url", "{url}");
-document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
-    let processJsonAsJs content = $"""export default {content};"""
+    let result = determineFileProcessing mimeType requestedAs content reqPath
 
-    match mimeType, requestedAs with
-    | "application/json", JS ->
-      setContentAndWrite(
-        MimeTypeNames.DefaultJavaScript,
-        processJsonAsJs(Encoding.UTF8.GetString content)
-        |> Encoding.UTF8.GetBytes
-      )
-    | "text/css", JS ->
-      setContentAndWrite(
-        MimeTypeNames.DefaultJavaScript,
-        processCssAsJs(Encoding.UTF8.GetString content, reqPath)
-        |> Encoding.UTF8.GetBytes
-      )
-    | mimeType, Normal -> setContentAndWrite(mimeType, content)
-    | mimeType, JS ->
-      logger.LogWarning(
-        "Requested {RequestedAs} - {MimeType} - {RequestPath} as JS, this file type is not supported as JS, sending default content",
-        JS,
-        mimeType,
-        reqPath
-      )
+    // Log warning if it was requested as JS but not supported
+    if
+      requestedAs = JS
+      && not result.ShouldProcess
+      && mimeType <> result.ContentType
+    then
+      logUnsupportedJsTransformation logger mimeType reqPath
 
-      setContentAndWrite(mimeType, content)
+    setContentAndWrite(result.ContentType, result.Content)
 
   let ResolveFile(logger: ILogger) : HttpContext -> RequestDelegate -> Task =
     fun ctx next -> taskUnit {
@@ -384,9 +498,18 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
       ctx.SetHttpHeader("Access-Control-Allow-Headers", "Cache-Control")
       ctx.SetStatusCode 200
       let res = ctx.Response
-      let writeHmrChange = LiveReload.WriteHmrChange logger
-      let writeReloadChange = LiveReload.WriteReloadChange logger
-      let writeCompileError = LiveReload.WriteCompileError logger
+
+      // Create ResponseWriter abstraction for testable functions
+      let responseWriter = {
+        WriteText = fun text -> task { do! res.WriteAsync(text) }
+        WriteBytes =
+          fun bytes -> task { do! res.Body.WriteAsync(bytes, 0, bytes.Length) }
+        SetHeader = fun key value -> ctx.SetHttpHeader(key, value)
+        SetStatusCode = fun code -> ctx.SetStatusCode(code)
+        SetContentType = fun contentType -> ctx.SetContentType(contentType)
+        Flush = fun () -> task { do! res.Body.FlushAsync() }
+      }
+
       // Start Client communication
       do! res.WriteAsync $"id:{ctx.Connection.Id}\ndata:{DateTime.Now}\n\n"
       do! res.Body.FlushAsync()
@@ -397,30 +520,27 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
           match event.changeType with
           | Changed ->
             match vfs.Resolve event.serverPath with
-            | Some(FileKind.BinaryFile _) -> do! writeReloadChange(event, res)
+            | Some(FileKind.BinaryFile _) ->
+              do! LiveReload.WriteReloadChange logger responseWriter event
             | Some(FileKind.TextFile file) ->
               if file.mimetype = MimeTypeNames.Css then
                 do!
-                  writeHmrChange(
-                    event,
-                    {
-                      content = file.content
-                      extension = ".css"
-                    },
-                    res
-                  )
+                  LiveReload.WriteHmrChange logger responseWriter event {
+                    content = file.content
+                    extension = ".css"
+                  }
               else
-                do! writeReloadChange(event, res)
+                do! LiveReload.WriteReloadChange logger responseWriter event
             | None ->
               logger.LogWarning(
                 "File Changed Event: {FileName} not found in VFS",
                 UMX.untag event.name
               )
 
-              do! writeReloadChange(event, res)
-          | _ -> do! writeReloadChange(event, res)
+              do! LiveReload.WriteReloadChange logger responseWriter event
+          | _ -> do! LiveReload.WriteReloadChange logger responseWriter event
 
-          do! res.Body.FlushAsync()
+          do! responseWriter.Flush()
         })
         |> Observable.switchTask
         |> Observable.subscribe(fun _ ->
@@ -429,8 +549,8 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
       let onCompilerErrorSub =
         compileErrorEvents
         |> Observable.map(fun error -> task {
-          do! writeCompileError(error, res)
-          do! res.Body.FlushAsync()
+          do! LiveReload.WriteCompileError logger responseWriter error
+          do! responseWriter.Flush()
         })
         |> Observable.switchTask
         |> Observable.subscribe(fun _ ->
