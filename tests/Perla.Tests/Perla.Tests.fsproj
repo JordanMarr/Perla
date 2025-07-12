@@ -8,6 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Perla\Perla.fsproj" />
     <ProjectReference Include="..\..\src\Perla.PkgManager\Perla.PkgManager.fsproj" />
+    <ProjectReference Include="..\..\src\Perla.Plugins\Perla.Plugins.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +21,7 @@
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FsHttp" />
     <PackageReference Include="FSharp.SystemCommandLine" />
+    <PackageReference Include="IcedTasks" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -32,6 +34,7 @@
     <Compile Include="Json.Tests.fs" />
     <Compile Include="FileSystem.Tests.fs" />
     <Compile Include="Database.Tests.fs" />
+    <Compile Include="Extensibility.Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>
