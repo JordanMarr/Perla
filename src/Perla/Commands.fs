@@ -5,11 +5,15 @@ open System.Threading
 open System.CommandLine
 open System.CommandLine.Invocation
 open System.CommandLine.Parsing
+open Microsoft.Extensions.Logging
+
+open IcedTasks
 
 open Perla
 open Perla.Extensibility
 open Perla.Types
 open Perla.Handlers
+open Perla.Warmup
 
 open FSharp.SystemCommandLine
 open FSharp.SystemCommandLine.Input
@@ -87,6 +91,47 @@ type PerlaArguments =
         "A property, properties or json path-like string names to describe",
       Arity = ArgumentArity.ZeroOrMore
     )
+
+type GlobalOptions = {
+  ci: bool
+  skipPrompts: bool
+  previewCommand: bool
+  setup: bool
+}
+
+module GlobalOptions =
+
+  let setup: ActionInput<bool> =
+    option "--setup"
+    |> alias "-s"
+    |> description
+      "Run the setup command to install templates and other dependencies"
+    |> defaultValue true
+
+  let ci: ActionInput<bool> =
+    option "--ci"
+    |> description
+      "Run the command in CI mode, which disables interactive prompts"
+    |> defaultValue false
+
+  let skipPrompts: ActionInput<bool> =
+    option "--skip"
+    |> description "Skip interactive prompts and use defaults"
+    |> defaultValue false
+
+  let previewCommand: ActionInput<bool> =
+    option "--preview-command"
+    |> description "Allows running a command before its officia release"
+    |> defaultValue false
+
+  let bind(parseResult) = {
+    ci = ci.GetValue parseResult
+    skipPrompts = skipPrompts.GetValue parseResult
+    previewCommand = previewCommand.GetValue parseResult
+    setup = setup.GetValue parseResult
+  }
+
+
 
 [<RequireQualifiedAccess>]
 module SharedInputs =
@@ -268,13 +313,61 @@ module Commands =
 
   let Build(container: AppContainer) =
 
-    let handleCommand(context: ActionContext, enablePreview: bool option) =
+    let handleCommand(context: ActionContext, enablePreview: bool option) = task {
+      let globalOptions = GlobalOptions.bind context.ParseResult
 
-      let options = {
-        enablePreview = defaultArg enablePreview false
+      let proceed() = cancellableTask {
+        let options = {
+          enablePreview = defaultArg enablePreview false
+        }
+
+        return! Handlers.runBuild container options
       }
 
-      Handlers.runBuild container options context.CancellationToken
+      if globalOptions.setup then
+        let! result =
+          Check.Setup
+            (container.Logger,
+             container.Db,
+             container.Configuration.PerlaConfig,
+             container.FableService,
+             [ Warmup.Esbuild; Warmup.Fable ])
+            context.CancellationToken
+
+        match result with
+        | Continue -> return! proceed () context.CancellationToken
+        | Recover value ->
+          let recoverArgs: Recover.RecoverArgs = {
+            config = container.Configuration.PerlaConfig
+            db = container.Db
+            pfsm = container.FsManager
+            logger = container.Logger
+            skipPrompts = globalOptions.skipPrompts
+            ci = globalOptions.ci || System.Console.IsOutputRedirected
+          }
+
+          let! canContinue =
+            Recover.From recoverArgs (Recover value) context.CancellationToken
+
+          match canContinue with
+          | Ok() -> return! proceed () context.CancellationToken
+          | _ ->
+            container.Logger.LogError(
+              "Perla setup failed, please run `perla setup` to fix the issue."
+            )
+
+            return 1
+        | HardExit ->
+          container.Logger.LogError(
+            "Perla setup failed, please run `perla setup` to fix the issue."
+          )
+
+          return 1
+
+      else
+        return! proceed () context.CancellationToken
+    }
+
 
     command "build" {
       description "Builds the SPA application for distribution"
@@ -293,8 +386,57 @@ module Commands =
         host: string option,
         ssl: bool option
       ) =
-      let options = { port = port; host = host; ssl = ssl }
-      Handlers.runServe container options (context.CancellationToken)
+      task {
+        let globalOptions = GlobalOptions.bind context.ParseResult
+
+        let proceed() = cancellableTask {
+          let options = { port = port; host = host; ssl = ssl }
+          return! Handlers.runServe container options context.CancellationToken
+        }
+
+        if globalOptions.setup then
+          let! result =
+            Check.Setup
+              (container.Logger,
+               container.Db,
+               container.Configuration.PerlaConfig,
+               container.FableService,
+               [ Warmup.Fable; Warmup.Esbuild ])
+              context.CancellationToken
+
+          match result with
+          | Continue -> return! proceed () context.CancellationToken
+          | Recover value ->
+            let recoverArgs: Recover.RecoverArgs = {
+              config = container.Configuration.PerlaConfig
+              db = container.Db
+              pfsm = container.FsManager
+              logger = container.Logger
+              skipPrompts = globalOptions.skipPrompts
+              ci = globalOptions.ci || System.Console.IsOutputRedirected
+            }
+
+            let! canContinue =
+              Recover.From recoverArgs (Recover value) context.CancellationToken
+
+            match canContinue with
+            | Ok() -> return! proceed () context.CancellationToken
+            | _ ->
+              container.Logger.LogError(
+                "Perla setup failed, please run `perla setup` to fix the issue."
+              )
+
+              return 1
+          | HardExit ->
+            container.Logger.LogError(
+              "Perla setup failed, please run `perla setup` to fix the issue."
+            )
+
+            return 1
+
+        else
+          return! proceed () context.CancellationToken
+      }
 
     let desc =
       "Starts the development server and if fable projects are present it also takes care of it."
@@ -400,41 +542,90 @@ module Commands =
         remove: bool option,
         format: ListFormat
       ) =
-      let operation =
-        let remove =
-          remove
-          |> Option.map (function
-            | true -> Some RunTemplateOperation.Remove
-            | false -> None)
-          |> Option.flatten
+      task {
+        let globalOptions = GlobalOptions.bind ctx.ParseResult
 
-        let update =
-          update
-          |> Option.map (function
-            | true -> Some RunTemplateOperation.Update
-            | false -> None)
-          |> Option.flatten
+        let proceed() = cancellableTask {
+          let operation =
+            let remove =
+              remove
+              |> Option.map (function
+                | true -> Some RunTemplateOperation.Remove
+                | false -> None)
+              |> Option.flatten
 
-        let add =
-          add
-          |> Option.map (function
-            | true -> Some RunTemplateOperation.Add
-            | false -> None)
-          |> Option.flatten
+            let update =
+              update
+              |> Option.map (function
+                | true -> Some RunTemplateOperation.Update
+                | false -> None)
+              |> Option.flatten
 
-        let format = RunTemplateOperation.List format
+            let add =
+              add
+              |> Option.map (function
+                | true -> Some RunTemplateOperation.Add
+                | false -> None)
+              |> Option.flatten
 
-        remove
-        |> Option.orElse update
-        |> Option.orElse add
-        |> Option.defaultValue format
+            let format = RunTemplateOperation.List format
 
-      let options = {
-        fullRepositoryName = name
-        operation = operation
+            remove
+            |> Option.orElse update
+            |> Option.orElse add
+            |> Option.defaultValue format
+
+          let options = {
+            fullRepositoryName = name
+            operation = operation
+          }
+
+          return! Handlers.runTemplate container options ctx.CancellationToken
+        }
+
+        if globalOptions.setup then
+          let! result =
+            Check.Setup
+              (container.Logger,
+               container.Db,
+               container.Configuration.PerlaConfig,
+               container.FableService,
+               [ Warmup.Templates ])
+              ctx.CancellationToken
+
+          match result with
+          | Continue -> return! proceed () ctx.CancellationToken
+          | Recover value ->
+            let recoverArgs: Recover.RecoverArgs = {
+              config = container.Configuration.PerlaConfig
+              db = container.Db
+              pfsm = container.FsManager
+              logger = container.Logger
+              skipPrompts = globalOptions.skipPrompts
+              ci = globalOptions.ci || System.Console.IsOutputRedirected
+            }
+
+            let! canContinue =
+              Recover.From recoverArgs (Recover value) ctx.CancellationToken
+
+            match canContinue with
+            | Ok() -> return! proceed () ctx.CancellationToken
+            | _ ->
+              container.Logger.LogError(
+                "Perla setup failed, please run `perla setup` to fix the issue."
+              )
+
+              return 1
+          | HardExit ->
+            container.Logger.LogError(
+              "Perla setup failed, please run `perla setup` to fix the issue."
+            )
+
+            return 1
+
+        else
+          return! proceed () ctx.CancellationToken
       }
-
-      Handlers.runTemplate container options ctx.CancellationToken
 
     let template = command "templates" {
       addAlias "t"
@@ -466,14 +657,63 @@ module Commands =
         byShortName: string option,
         skipPrompts: bool
       ) =
-      let options = {
-        projectName = name
-        byId = byId
-        byShortName = byShortName
-        skipPrompts = skipPrompts
-      }
+      task {
+        let globalOptions = GlobalOptions.bind ctx.ParseResult
 
-      Handlers.runNew container options ctx.CancellationToken
+        let proceed() = cancellableTask {
+          let options = {
+            projectName = name
+            byId = byId
+            byShortName = byShortName
+            skipPrompts = skipPrompts
+          }
+
+          return! Handlers.runNew container options ctx.CancellationToken
+        }
+
+        if globalOptions.setup then
+          let! result =
+            Check.Setup
+              (container.Logger,
+               container.Db,
+               container.Configuration.PerlaConfig,
+               container.FableService,
+               [ Warmup.Templates; Warmup.Esbuild; Warmup.Fable ])
+              ctx.CancellationToken
+
+          match result with
+          | Continue -> return! proceed () ctx.CancellationToken
+          | Recover value ->
+            let recoverArgs: Recover.RecoverArgs = {
+              config = container.Configuration.PerlaConfig
+              db = container.Db
+              pfsm = container.FsManager
+              logger = container.Logger
+              skipPrompts = globalOptions.skipPrompts
+              ci = globalOptions.ci || System.Console.IsOutputRedirected
+            }
+
+            let! canContinue =
+              Recover.From recoverArgs (Recover value) ctx.CancellationToken
+
+            match canContinue with
+            | Ok() -> return! proceed () ctx.CancellationToken
+            | _ ->
+              container.Logger.LogError(
+                "Perla setup failed, please run `perla setup` to fix the issue."
+              )
+
+              return 1
+          | HardExit ->
+            container.Logger.LogError(
+              "Perla setup failed, please run `perla setup` to fix the issue."
+            )
+
+            return 1
+
+        else
+          return! proceed () ctx.CancellationToken
+      }
 
     command "new" {
       addAliases [ "n"; "create"; "generate" ]

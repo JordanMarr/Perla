@@ -37,51 +37,50 @@ module Warmup =
   [<RequireQualifiedAccess>]
   module Check =
 
-    let EsbuildPlugin(config: PerlaConfig aval, logger: ILogger) =
-      let plugins = config |> AVal.map(fun c -> c.plugins) |> AVal.force
-
-      if plugins |> Seq.contains Constants.PerlaEsbuildPluginName then
-        Continue
-      else
-        logger.LogWarning
-          "The Perla esbuild plugin is not installed, this may cause issues with your build."
-
-        Recover(set [ Esbuild ])
-
     let Setup
       (
         logger: ILogger,
         db: PerlaDatabase,
         config: PerlaConfig aval,
-        fable: FableService
+        fable: FableService,
+        requiredAssets: RecoverableAssets seq
       ) =
       cancellableTask {
-        let templates = db.Checks.AreTemplatesPresent()
+        let requiredAssetsSet = set requiredAssets
 
-        let esbuild =
-          db.Checks.IsEsbuildBinPresent(
-            config |> AVal.force |> _.esbuild.version
-          )
+        let! missingAssets = cancellableTask {
+          let missing = ResizeArray<RecoverableAssets>()
 
-        let needsFable = config |> AVal.force |> _.fable |> Option.isSome
+          if Set.contains Templates requiredAssetsSet then
+            let templates = db.Checks.AreTemplatesPresent()
 
-        let! fable =
-          // if there's no fable in the config, we don't need to check for it
-          if not needsFable then
-            CancellableTask.singleton true
-          else
-            fable.IsPresent()
+            if not templates then
+              missing.Add(Templates)
 
-        let missingAssets = [
-          if not templates then
-            Templates
+          if Set.contains Esbuild requiredAssetsSet then
+            let esbuild =
+              db.Checks.IsEsbuildBinPresent(
+                config |> AVal.force |> _.esbuild.version
+              )
 
-          if not esbuild then
-            Esbuild
+            if not esbuild then
+              missing.Add(Esbuild)
 
-          if not fable then
-            Fable
-        ]
+          if Set.contains Fable requiredAssetsSet then
+            let needsFable = config |> AVal.force |> _.fable |> Option.isSome
+
+            let! fablePresent =
+              // if there's no fable in the config, we don't need to check for it
+              if not needsFable then
+                CancellableTask.singleton true
+              else
+                fable.IsPresent()
+
+            if not fablePresent then
+              missing.Add(Fable)
+
+          return missing |> Seq.toList
+        }
 
         if Seq.isEmpty missingAssets then
           return Continue
@@ -92,29 +91,6 @@ module Warmup =
           return Recover(set missingAssets)
       }
 
-    let Templates(db: PerlaDatabase, logger: ILogger) =
-      db.Checks.AreTemplatesPresent()
-      |> function
-        | true -> Continue
-        | false ->
-          logger.LogWarning
-            "The Perla templates are not installed, this may cause issues with your build."
-
-          Recover(set [ Templates ])
-
-    let Fable(fable: FableService, logger: ILogger) = cancellableTask {
-      let! isPresent = fable.IsPresent()
-
-      if isPresent then
-        return Continue
-      else
-        logger.LogWarning
-          "The Fable compiler is not installed, this may cause issues with your build."
-
-        return Recover(set [ Fable ])
-    }
-
-
   module Recover =
 
     type SetupFailure =
@@ -122,6 +98,15 @@ module Warmup =
       | TemplatesFailed
       | FableFailed
       | HardExitRequested
+
+    type RecoverArgs = {
+      config: PerlaConfig aval
+      db: PerlaDatabase
+      pfsm: PerlaFsManager
+      logger: ILogger
+      skipPrompts: bool
+      ci: bool
+    }
 
     let esbuildSetup
       (
@@ -208,53 +193,57 @@ module Warmup =
         return! Error FableFailed
     }
 
-    let From
-      (
-        config: PerlaConfig aval,
-        db: PerlaDatabase,
-        pfsm: PerlaFsManager,
-        logger: ILogger
-      )
-      (result: MiddlewareResult)
-      =
-      cancellableTaskResult {
-        let! token = CancellableTaskResult.getCancellationToken()
+    let From (args: RecoverArgs) (result: MiddlewareResult) = cancellableTaskResult {
+      let! token = CancellableTaskResult.getCancellationToken()
 
-        match result with
-        | Continue -> return ()
-        | HardExit ->
-          logger.LogError "Setup failed, exiting."
-          return! Error(HardExitRequested)
-        | Recover recoverFrom ->
-          logger.LogInformation "Recovering from missing assets: {recoverFrom}."
+      match result with
+      | Continue -> return ()
+      | HardExit ->
+        args.logger.LogError "Setup failed, exiting."
+        return! Error(HardExitRequested)
+      | Recover recoverFrom ->
+        args.logger.LogInformation
+          "Recovering from missing assets: {recoverFrom}."
 
-          let! result =
-            Spectre.Console.AnsiConsole.ConfirmAsync(
-              "Some required assets are missing. Do you want to install them?",
-              true
-            )
-
-          if not result then
-            logger.LogWarning
-              "You chose not to recover from missing assets, this may cause issues with some of your commands."
-
-            return ()
+        let! shouldProceed =
+          if args.ci || args.skipPrompts then
+            CancellableTask.singleton true
           else
-            logger.LogInformation
-              "Starting setup for missing assets: {recoverFrom}."
+            cancellableTask {
+              let! result =
+                Spectre.Console.AnsiConsole.ConfirmAsync(
+                  "Some required assets are missing. Do you want to install them?",
+                  true
+                )
 
-            let! _ =
-              recoverFrom
-              |> Seq.traverseTaskResultM(fun asset -> taskResult {
-                match asset with
-                | Esbuild ->
-                  return! esbuildSetup (config, db, pfsm, logger) token
-                | Templates -> return! templatesSetup (db, pfsm, logger) token
-                | Fable -> return! fableSetup (pfsm, logger) token
-              })
+              return result
+            }
 
-            return ()
-      }
+        if not shouldProceed then
+          args.logger.LogWarning
+            "You chose not to recover from missing assets, this may cause issues with some of your commands."
+
+          return ()
+        else
+          args.logger.LogInformation
+            "Starting setup for missing assets: {recoverFrom}."
+
+          let! _ =
+            recoverFrom
+            |> Seq.traverseTaskResultM(fun asset -> taskResult {
+              match asset with
+              | Esbuild ->
+                return!
+                  esbuildSetup
+                    (args.config, args.db, args.pfsm, args.logger)
+                    token
+              | Templates ->
+                return! templatesSetup (args.db, args.pfsm, args.logger) token
+              | Fable -> return! fableSetup (args.pfsm, args.logger) token
+            })
+
+          return ()
+    }
 
 type HasLogger =
   abstract member Logger: ILogger
