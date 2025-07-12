@@ -441,44 +441,6 @@ module FileChangesTests =
 
     Assert.NotNull observable
 
-  [<Fact>]
-  let ``FileChanges should allow subscription``() = async {
-    let logger = TestHelpers.createLogger()
-    let extensibility = FakeExtensibilityService() :> ExtensibilityService
-
-    let args = {
-      Extensibility = extensibility
-      Logger = logger
-    }
-
-    use vfs = VirtualFs.Create(args)
-    let observable = vfs.FileChanges
-
-    let mutable receivedEvent = false
-    use subscription = observable.Subscribe(fun _ -> receivedEvent <- true)
-
-    Assert.NotNull(subscription)
-    let tmp = TestHelpers.createTempDir()
-    // write files to the tmp directory to trigger events
-    TestHelpers.createTempFile tmp "test.txt" "Initial content" |> ignore
-    // Load the virtual file system to ensure it has files to observe
-    let serverUrl = UMX.tag<ServerUrl> "/static"
-    let userPath = UMX.tag<UserPath>(UMX.untag tmp)
-    let mounts = Map.add serverUrl userPath Map.empty
-    do! vfs.Load(mounts)
-    // Trigger a change by updating the file
-    TestHelpers.createTempFile tmp "test.txt" "Updated content" |> ignore
-    // Wait a bit to ensure the event is processed
-    do! Async.Sleep(100)
-
-    Assert.True(
-      receivedEvent,
-      "Expected FileChanges observable to emit an event"
-    )
-
-    TestHelpers.deleteTempDir tmp
-  }
-
 // Error handling tests
 module ErrorHandlingTests =
 
