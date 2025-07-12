@@ -36,6 +36,7 @@
     <Compile Include="VirtualFileSystem.Tests.fs" />
     <Compile Include="Database.Tests.fs" />
     <Compile Include="Extensibility.Tests.fs" />
+    <Compile Include="Build.Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>
