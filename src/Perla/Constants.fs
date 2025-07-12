@@ -1,7 +1,7 @@
 ﻿module Perla.Constants
 
 [<Literal>]
-let Esbuild_Version = "0.19.5"
+let Esbuild_Version = "0.25.6"
 
 [<Literal>]
 let Esbuild_Target = "es2020"
