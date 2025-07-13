@@ -91,7 +91,6 @@ type DecodedPerlaConfig = {
 [<AutoOpen>]
 module internal Decoders =
   val DownloadProviderDecoder: Decoder<PkgManager.DownloadProvider>
-  val PkgDependencyDecoder: Decoder<PkgDependency>
   val PkgDependencySetDecoder: Decoder<PkgDependency Set>
   val TestStatsDecoder: Decoder<TestStats>
   val TestDecoder: Decoder<Test>

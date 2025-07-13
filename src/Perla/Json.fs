@@ -125,24 +125,14 @@ module internal Decoders =
       return PkgManager.DownloadProvider.fromString str
     }
 
-  let PkgDependencyDecoder: Decoder<PkgDependency> =
-    fun element -> decode {
-      let! package = Required.Property.get ("package", Required.string) element
-      let! version = Required.Property.get ("version", Required.string) element
-
-      return {
-        package = package
-        version = UMX.tag version
-      }
-    }
 
   let PkgDependencySetDecoder: Decoder<PkgDependency Set> =
     fun element -> decode {
       // Dependencies come as object: { "package1": "version1", "package2": "version2" }
-      let! dependencyMap =
-        Optional.Property.map ("dependencies", Required.string) element
 
-      let dependencyMap = defaultArg dependencyMap Map.empty
+      let! dependencies = Optional.map Required.string element
+
+      let dependencyMap = defaultArg dependencies Map.empty
 
       return
         Set [
@@ -337,7 +327,6 @@ let DefaultJsonOptions() =
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
   )
   |> Codec.useDecoder TestEventDecoder
-  |> Codec.useDecoder PkgDependencyDecoder
   |> Codec.useDecoder PkgManager.DownloadResponse.Decoder
   |> Codec.useCodec(Encoders.Browser, BrowserDecoder)
   |> Codec.useCodec(Encoders.BrowserMode, BrowserModeDecoder)

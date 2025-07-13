@@ -1,1 +1,25 @@
-{"$schema":"../perla.schema.json","schema-version":"2025-07","fable":{"project":"./src/App.fsproj","extension":".js","outDir":"./fable_output"},"mountDirectories":{"/src":"./src","/fable_output":"./fable_output","/assets":"./assets"},"build":{"includes":["assets/favicon.ico","assets/manifest.webmanifest"]},"testing":{"fable":{"project":"./tests/App.Tests.fsproj"}},"dependencies":{"fsharp-components":"0.0.4","lit":"2.4.0","rxjs":"7.5.7","chai":"4.3.4"}}
+{
+  "$schema": "../perla.schema.json",
+  "schema-version": "2025-07",
+  "fable": {
+    "project": "./src/App.fsproj",
+    "extension": ".js",
+    "outDir": "./fable_output"
+  },
+  "mountDirectories": {
+    "/src": "./src",
+    "/fable_output": "./fable_output",
+    "/assets": "./assets"
+  },
+  "build": {
+    "includes": ["assets/favicon.ico", "assets/manifest.webmanifest"]
+  },
+  "testing": { "fable": { "project": "./tests/App.Tests.fsproj" } },
+  "dependencies": {
+    "chai": "4.3.4",
+    "fsharp-components": "0.0.4",
+    "lit": "2.4.0",
+    "rxjs": "7.5.7"
+  },
+  "useLocalPkgs": false
+}

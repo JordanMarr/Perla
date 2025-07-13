@@ -1,5 +1,4 @@
 ﻿import { render, html } from "lit";
-import { TsSample } from "./file.js";
 
 function Sample() {
   return html`<h1 style="color: var(--primary-color)">Hello world!</h1>`;

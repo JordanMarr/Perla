@@ -683,8 +683,13 @@ module SpaMiddleware =
       then
         return! next.Invoke(context)
       else
+        let indexFile = UMX.untag config.index
         // Rewrite to default page for SPA
-        context.Request.Path <- PathString(UMX.untag config.index)
+        if (indexFile).StartsWith('.') then
+          context.Request.Path <- PathString(indexFile[1..])
+        else
+          // If index is absolute, we assume it's a root-relative path
+          context.Request.Path <- PathString(indexFile)
 
         return! next.Invoke(context)
     }

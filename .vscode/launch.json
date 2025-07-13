@@ -23,6 +23,19 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "Perla install",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/Perla/bin/Debug/net9.0/Perla.dll",
+            "args": [
+                "install"
+            ],
+            "cwd": "${workspaceFolder}/sample",
+            "stopAtEntry": false,
+            "console": "integratedTerminal"
+        },
+        {
             "name": "Perla build",
             "type": "coreclr",
             "request": "launch",
@@ -46,21 +59,6 @@
                 "samplixor"
             ],
             "cwd": "${workspaceFolder}/../",
-            "stopAtEntry": false,
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Perla resolution",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Perla/bin/Debug/net9.0/Perla.dll",
-            "args": [
-                "resolution",
-                "@app/components",
-                "./components/exports.js"
-            ],
-            "cwd": "${workspaceFolder}/sample",
             "stopAtEntry": false,
             "console": "integratedTerminal"
         },
@@ -189,21 +187,6 @@
             "args": [
                 "add",
                 "lit"
-            ],
-            "cwd": "${workspaceFolder}/sample",
-            "stopAtEntry": false,
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Perla restore -m dev",
-            "type": "coreclr",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Perla/bin/Debug/net9.0/Perla.dll",
-            "args": [
-                "restore",
-                "-m",
-                "dev"
             ],
             "cwd": "${workspaceFolder}/sample",
             "stopAtEntry": false,

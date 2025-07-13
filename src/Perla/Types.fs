@@ -272,7 +272,7 @@ module Defaults =
   }
 
   let PerlaConfig = {
-    index = UMX.tag Constants.IndexFile
+    index = UMX.tag $"./{Constants.IndexFile}"
     provider = PkgManager.DownloadProvider.JspmIo
     useLocalPkgs = false
     plugins = []

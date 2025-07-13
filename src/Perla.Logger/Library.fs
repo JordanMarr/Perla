@@ -280,7 +280,7 @@ type SpectreSink() =
       let message = logEvent.RenderMessage()
 
       AnsiConsole.MarkupLine
-        $"[[grey]{timestamp}[/] [{levelColor}]{levelString}[/] {prefix}]  {message}"
+        $"[[[grey]{timestamp}[/] [{levelColor}]{levelString}[/] {prefix}]]  {message}"
 
       match logEvent.Exception with
       | null -> ()
