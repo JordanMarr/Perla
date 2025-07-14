@@ -4,7 +4,31 @@
 
 Perla is a cross-platform single executable binary CLI Tool for a Development Server of Single Page Applications (like vite/webpack but no node required!).
 
-If that sounds like something nice, [Check The docs!](https://perla-docs.web.app/)
+## Installation
+
+You can install Perla manually by downloading the latest release from the [releases page](https://github.com/AngelMunoz/Perla/releases/latest) and adding it to your path.
+
+If you prefer a more automated approach, you can use the provided install scripts, they're available on this repository for you to review the contents before running them.
+
+For Linux or macOS, you can run the following command in your terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AngelMunoz/Perla/dev/install.sh | bash
+```
+
+For Windows (or Linux, MacOS if you've installed pwsh), you can use powershell to run the install script:
+
+```powershell
+iwr https://raw.githubusercontent.com/AngelMunoz/Perla/dev/install.ps1 -UseBasicParsing | iex
+```
+
+If you prefer to use the dotnet (global | local) tool, you can install it using the following command:
+
+```bash
+dotnet tool install --global Perla
+```
+
+Once you're done with the installation, you can run `perla --help` to verify that the installation was successful.
 
 ```
 Description:
@@ -14,22 +38,19 @@ Usage:
   Perla [command] [options]
 
 Options:
-  --version       Show version information
   -?, -h, --help  Show help and usage information
-  --info <info>   Brings the Help dialog []
+  --version       Show version information
 
 Commands:
-  setup                                  Initialized a given directory or perla itself
-  t, templates <templateRepositoryName>  Handles Template Repository operations such as list, add, update, and remove templates
-  describe, ds <properties>              Describes the perla.json file or it's properties as requested
-  b, build                               Builds the SPA application for distribution
-  s, serve, start                        Starts the development server and if fable projects are present it also takes care of it.
-  add, install <package>                 Shows information about a package if the name matches an existing one
-  remove <package>                       removes a package from the
-  list, ls                               Lists the current dependencies in a table or an npm style json string
-  regenerate, restore                    Restore the import map based on the selected mode, defaults to production
   create, generate, n, new <name>        Creates a new project based on the selected template if it exists
-
+  install                                Installs the project dependencies from the perla.json file
+  add <package>                          Adds a package to the project dependencies
+  remove <package>                       Removes a package from the project dependencies
+  list, ls                               Lists the current dependencies in a table or an npm style json string
+  s, serve, start                        Starts the development server and if fable projects are present it also takes care of it.
+  b, build                               Builds the SPA application for distribution
+  t, templates <TemplateRepositoryName>  Handles Template Repository operations such as list, add, update, and remove templates []
+  describe, ds <properties>              Describes the perla.json file or it's properties as requested
 ```
 
 ## Existing tools
