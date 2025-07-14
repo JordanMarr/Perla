@@ -10,13 +10,13 @@ let runtimes = [|
   "linux-arm64"
   "osx-x64"
   "osx-arm64"
-  "win10-x64"
-  "win10-arm64"
+  "win-x64"
+  "win-arm64"
 |]
 
 let projects = [ "Perla" ]
 
-let libraries = [ "Perla.PackageManager"; "Perla.Plugins"; "Perla.Logger" ]
+let libraries = [ "Perla.PkgManager"; "Perla.Plugins"; "Perla.Logger" ]
 
 let NugetApiKey = EnvVar.getOrFail "NUGET_DEPLOY_KEY"
 
@@ -86,7 +86,7 @@ module Operations =
 
   let buildBinaries (project: string) (runtime: string) =
     let cmd =
-      let framework = "net7.0"
+      let framework = "net9.0"
       let outdir = $"{outDir}/{runtime}"
       $"publish {project} -c Release -f {framework} -r {runtime} --self-contained -p:Version={PackageVersion} -o {outdir}"
 
