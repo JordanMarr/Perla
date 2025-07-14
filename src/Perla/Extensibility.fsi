@@ -8,7 +8,7 @@ open Perla.Plugins.Registry
 [<Interface>]
 type ExtensibilityService =
   abstract LoadPlugins:
-    pluginFiles: (string * string)[] * ?esbuildPlugin: PluginInfo ->
+    pluginFiles: (string * string)[] * ?defaultPlugins: seq<PluginInfo> ->
       Result<PluginInfo list, PluginLoadError>
 
   abstract GetAllPlugins: unit -> PluginInfo list

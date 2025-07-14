@@ -13,7 +13,7 @@ open Perla.Plugins.Registry
 [<Interface>]
 type ExtensibilityService =
   abstract LoadPlugins:
-    pluginFiles: (string * string)[] * ?esbuildPlugin: PluginInfo ->
+    pluginFiles: (string * string)[] * ?defaultPlugins: seq<PluginInfo> ->
       Result<PluginInfo list, PluginLoadError>
 
   abstract GetAllPlugins: unit -> PluginInfo list
@@ -76,13 +76,13 @@ module ExtensibilityService =
     let pluginManager = PluginManager.Create(stdout, stderr)
 
     { new ExtensibilityService with
-        member _.LoadPlugins(pluginFiles, ?esbuildPlugin) = result {
-          // Load the esbuild plugin first if provided
-          match esbuildPlugin with
-          | Some plugin ->
+        member _.LoadPlugins(pluginFiles, ?defaultPlugins) = result {
+          let plugins = defaultArg defaultPlugins Seq.empty
+
+          // Load all default plugins first if provided
+          for plugin in plugins do
             do! pluginManager.LoadFromCode(plugin)
-            logger.LogInformation($"Loaded esbuild plugin: {plugin.name}")
-          | None -> ()
+            logger.LogInformation($"Loaded default plugin: {plugin.name}")
 
           // Load plugins from files
           let! loadResults =
@@ -91,7 +91,6 @@ module ExtensibilityService =
               pluginManager.LoadFromText(path, content))
             |> Result.teeError(fun (error: PluginLoadError) ->
               logger.LogError("Failure to load a plugin: {error}", error))
-
 
           // Return all loaded plugins
           return pluginManager.GetAllPlugins()

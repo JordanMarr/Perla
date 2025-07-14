@@ -25,16 +25,9 @@ open Perla
 open Perla.Units
 open Perla.Types
 open Perla.Json
-open Perla
-open Perla.FileSystem
 open Perla.Database
 open Perla.Fable
-open Perla.Esbuild
-open Perla.Extensibility
-open Perla.VirtualFs
 open Perla.Build
-open Perla.Scaffolding
-open Perla.Configuration
 open Perla.Logger
 open Perla.PkgManager
 open Perla.PkgManager.PkgManager
@@ -494,19 +487,24 @@ module Handlers =
 
     let plugins = container.FsManager.ResolvePluginPaths()
 
-    let esbuildPlugin =
-      config.plugins
-      |> List.tryFind(fun p ->
-        p.Equals(
-          Constants.PerlaEsbuildPluginName,
-          StringComparison.InvariantCultureIgnoreCase
-        ))
-      |> Option.map(fun _ -> container.EsbuildService.GetPlugin config.esbuild)
+    let defaultPlugins = seq {
+      if not(Map.isEmpty config.paths) then
+        ImportMaps.createPathsReplacerPlugin(
+          container.Configuration.PerlaConfig |> AVal.map _.paths
+        )
 
-    container.ExtensibilityService.LoadPlugins(
-      plugins,
-      ?esbuildPlugin = esbuildPlugin
-    )
+      if
+        config.plugins
+        |> List.exists(fun p ->
+          p.Equals(
+            Constants.PerlaEsbuildPluginName,
+            StringComparison.InvariantCultureIgnoreCase
+          ))
+      then
+        container.EsbuildService.GetPlugin config.esbuild
+    }
+
+    container.ExtensibilityService.LoadPlugins(plugins, defaultPlugins)
     |> Result.teeError(fun err ->
       container.Logger.LogError("Failed to load plugins: {error}", err))
     |> Result.ignore
@@ -658,22 +656,24 @@ module Handlers =
       return 0
     else
 
-      let esbuildPlugin =
-        config.plugins
-        |> List.tryFind(fun p ->
-          p.Equals(
-            Constants.PerlaEsbuildPluginName,
-            StringComparison.InvariantCultureIgnoreCase
-          ))
-        |> Option.map(fun _ ->
-          container.EsbuildService.GetPlugin config.esbuild)
-
       let plugins = container.FsManager.ResolvePluginPaths()
 
-      container.ExtensibilityService.LoadPlugins(
-        plugins,
-        ?esbuildPlugin = esbuildPlugin
-      )
+      let defaultPlugins = seq {
+        if not(Map.isEmpty config.paths) then
+          ImportMaps.createPathsReplacerPlugin(configA |> AVal.map _.paths)
+
+        if
+          config.plugins
+          |> List.exists(fun p ->
+            p.Equals(
+              Constants.PerlaEsbuildPluginName,
+              StringComparison.InvariantCultureIgnoreCase
+            ))
+        then
+          container.EsbuildService.GetPlugin config.esbuild
+      }
+
+      container.ExtensibilityService.LoadPlugins(plugins, defaultPlugins)
       |> Result.teeError(fun err ->
         container.Logger.LogError("Failed to load plugins: {error}", err))
       |> Result.ignore

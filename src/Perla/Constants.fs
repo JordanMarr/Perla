@@ -60,3 +60,6 @@ let SchemaVersion = "2025-07"
 
 [<Literal>]
 let PerlaEsbuildPluginName = "perla-esbuild-plugin"
+
+[<Literal>]
+let PerlaPathsReplacerPluginName = "perla-paths-replacer-plugin"
