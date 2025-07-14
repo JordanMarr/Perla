@@ -621,12 +621,12 @@ let ``CopyGlobs should copy files matching local file system patterns``() =
   // Create a build config with includes patterns
   let buildConfig = {
     Defaults.BuildConfig with
-        includes = [ "lfs:**/*.txt"; "lfs:**/*.css"; "lfs:src/**/*.js" ]
+        includes = [ "**/*.txt"; "**/*.css"; "src/**/*.js" ]
         outDir = outputTempDir.Path
   }
 
   // Execute CopyGlobs
-  fsManager.CopyGlobs(buildConfig, outputTempDir.Path)
+  fsManager.CopyGlobs(buildConfig)
 
   // Verify files were copied
   let expectedTestFile = Path.Combine(UMX.untag outputTempDir.Path, "test.txt")
