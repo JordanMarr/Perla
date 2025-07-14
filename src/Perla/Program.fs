@@ -1,4 +1,4 @@
-﻿// Learn more about F# at http://docs.microsoft.com/dotnet/fsharp
+// Learn more about F# at http://docs.microsoft.com/dotnet/fsharp
 
 open Microsoft.Extensions.Logging
 open FSharp.SystemCommandLine
@@ -65,7 +65,8 @@ let main argv =
       // don't replace leading @ strings e.g. @lit-labs/task
       cfg.ResponseFileTokenReplacer <- null)
 
-    noActionAsync
+    inputs Input.context
+    helpActionAsync
 
     addCommands [
       Commands.NewProject appContainer
@@ -79,8 +80,6 @@ let main argv =
       Commands.Template appContainer
       Commands.Describe appContainer
     ]
-
-    helpActionAsync
   }
   |> Async.AwaitTask
   |> Async.RunSynchronously
