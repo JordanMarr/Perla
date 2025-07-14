@@ -79,8 +79,7 @@ type PerlaFsManager =
     user: string * repository: string<Repository> * branch: string<Branch> ->
       CancellableTask<(string<SystemPath> * DecodedTemplateConfiguration) option>
 
-  abstract CopyGlobs:
-    buildConfig: BuildConfig * tempDir: string<SystemPath> -> unit
+  abstract CopyGlobs: buildConfig: BuildConfig -> unit
 
   abstract EmitEnvFile:
     config: PerlaConfig * ?tmpPath: string<SystemPath> -> unit
@@ -522,63 +521,22 @@ module FileSystem =
             return None
         }
 
-        member _.CopyGlobs
-          (buildConfig: BuildConfig, tempDir: string<SystemPath>)
-          =
+        member _.CopyGlobs(buildConfig: BuildConfig) =
           let outDir = UMX.untag buildConfig.outDir |> Path.GetFullPath
+          let cwd = args.PerlaDirectories.CurrentWorkingDirectory |> UMX.untag
 
-          let chooseGlobs
-            (startsWith: string)
-            (contains: string)
-            (glob: string)
-            =
-            if glob.StartsWith startsWith then
-              Some(glob.Substring startsWith.Length)
-            elif not(glob.Contains contains) then
-              Some(glob)
-            else
-              None
+          let includes = buildConfig.includes |> Seq.toList
+          let excludes = buildConfig.excludes |> Seq.toList
 
-          let lfsGlob =
-            let localIncludes =
-              buildConfig.includes
-              |> Seq.choose(chooseGlobs "lfs:" "vfs:")
-              |> Seq.toList
+          let pattern = {
+            BaseDirectory = cwd
+            Includes = includes
+            Excludes = excludes
+          }
 
-            let localExcludes =
-              buildConfig.excludes
-              |> Seq.choose(chooseGlobs "lfs:" "vfs:")
-              |> Seq.toList
+          let filesToCopy = pattern |> Seq.toArray
 
-            {
-              BaseDirectory =
-                args.PerlaDirectories.CurrentWorkingDirectory |> UMX.untag
-              Includes = localIncludes
-              Excludes = localExcludes
-            }
-
-          let vfsGlob =
-            let virtualIncludes =
-              buildConfig.includes
-              |> Seq.choose(chooseGlobs "vfs:" "lfs:")
-              |> Seq.toList
-
-            let virtualExcludes =
-              buildConfig.excludes
-              |> Seq.choose(chooseGlobs "vfs:" "lfs:")
-              |> Seq.toList
-
-            {
-              BaseDirectory = UMX.untag tempDir
-              Includes = virtualIncludes
-              Excludes = virtualExcludes
-            }
-
-          let copyAndIncrement
-            (cwd: string)
-            (tsk: ProgressTask)
-            (file: string)
-            =
+          let copyAndIncrement (tsk: ProgressTask) (file: string) =
             tsk.Increment 1
             let targetPath = file.Replace(cwd, outDir)
 
@@ -595,30 +553,14 @@ module FileSystem =
           AnsiConsole
             .Progress()
             .Start(fun ctx ->
-              let lfsTask =
+              let task =
                 ctx.AddTask(
-                  "Copy Local Files to Output",
+                  "Copy Files to Output",
                   true,
-                  lfsGlob |> Seq.length |> float
+                  filesToCopy.Length |> float
                 )
 
-              let vfsTask =
-                ctx.AddTask(
-                  "Copy virtual files to Output",
-                  true,
-                  vfsGlob |> Seq.length |> float
-                )
-
-              let copyLocal =
-                copyAndIncrement
-                  (UMX.untag args.PerlaDirectories.CurrentWorkingDirectory)
-                  lfsTask
-
-              let copyVirtual = copyAndIncrement (UMX.untag tempDir) vfsTask
-
-              vfsGlob |> Seq.toArray |> Array.Parallel.iter copyVirtual
-
-              lfsGlob |> Seq.toArray |> Array.Parallel.iter copyLocal)
+              filesToCopy |> Array.Parallel.iter(copyAndIncrement task))
 
         member this.EmitEnvFile
           (config: PerlaConfig, ?tmpPath: string<SystemPath>)

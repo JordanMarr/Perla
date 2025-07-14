@@ -545,15 +545,15 @@ module LiveReload =
 
 module SpaFallback =
 
-  let spaFallback(config: PerlaConfig) : WebPart =
+  let spaFallback(configA: PerlaConfig aval) : WebPart =
     fun ctx -> async {
       let path = ctx.request.url.AbsolutePath
 
       // Skip if it's an API call, Perla internal path, or has file extension
       if
-        path.StartsWith("/api/")
-        || path.StartsWith("/~perla~/")
-        || Path.HasExtension(path)
+        path.StartsWith "/api/"
+        || path.StartsWith "/~perla~/"
+        || Path.HasExtension path
       then
         return None
       else
@@ -607,12 +607,18 @@ module PerlaHandlers =
       return! OK content ctx
     }
 
-  let indexHandler(config: PerlaConfig, fsManager: PerlaFsManager) =
+  let indexHandler(configA: PerlaConfig aval, fsManager: PerlaFsManager) =
     path "/"
     >=> setMimeType "text/html"
     >=> fun ctx -> async {
       let content = fsManager.ResolveIndex |> AVal.force
-      let map = fsManager.ResolveImportMap |> AVal.force
+
+      let map =
+        fsManager.ResolveImportMap
+        |> ImportMaps.withPathsA configA
+        |> AVal.force
+
+      let config = configA |> AVal.force
 
       use context = BrowsingContext.New Configuration.Default
       let parser = context.GetService<IHtmlParser>() |> nonNull
@@ -639,11 +645,8 @@ module PerlaHandlers =
     }
 
   let testingIndexHandler
-    (
-      config: PerlaConfig,
-      fsManager: PerlaFsManager,
-      importMap: Perla.PkgManager.ImportMap
-    ) =
+    (configA: PerlaConfig aval, fsManager: PerlaFsManager)
+    =
     path "/"
     >=> setMimeType "text/html"
     >=> fun ctx -> async {
@@ -673,7 +676,15 @@ module PerlaHandlers =
 
       let script: Dom.IElement = doc.CreateElement "script"
       script.SetAttribute("type", "importmap")
-      script.TextContent <- Json.ToText(importMap)
+
+      let mergedImportMap =
+        fsManager.ResolveImportMap
+        |> ImportMaps.withPathsA configA
+        |> AVal.force
+
+      let config = configA |> AVal.force
+
+      script.TextContent <- Json.ToText(mergedImportMap)
       head.AppendChild script |> ignore
 
       let mochaScript = doc.CreateElement "script"
@@ -967,7 +978,7 @@ module SuaveServer =
       PerlaHandlers.workerScript suaveCtx.FsManager
       PerlaHandlers.testingHelpers suaveCtx.FsManager
       PerlaHandlers.mochaRunner suaveCtx.FsManager
-      PerlaHandlers.indexHandler(config, suaveCtx.FsManager)
+      PerlaHandlers.indexHandler(suaveCtx.Config, suaveCtx.FsManager)
 
       // Testing endpoints
       pathStarts "/~perla~/testing/"
@@ -1003,7 +1014,7 @@ module SuaveServer =
       VirtualFiles.resolveFile suaveCtx
 
       // SPA fallback
-      SpaFallback.spaFallback config
+      SpaFallback.spaFallback suaveCtx.Config
 
       // Final fallback
       NOT_FOUND "Resource not found"
@@ -1024,7 +1035,7 @@ module SuaveServer =
       PerlaHandlers.workerScript suaveCtx.FsManager
       PerlaHandlers.testingHelpers suaveCtx.FsManager
       PerlaHandlers.mochaRunner suaveCtx.FsManager
-      PerlaHandlers.indexHandler(config, suaveCtx.FsManager)
+      PerlaHandlers.indexHandler(suaveCtx.Config, suaveCtx.FsManager)
 
       // Environment variables endpoint (if enabled)
       if config.enableEnv then
@@ -1040,7 +1051,7 @@ module SuaveServer =
       VirtualFiles.resolveFile suaveCtx
 
       // SPA fallback
-      SpaFallback.spaFallback config
+      SpaFallback.spaFallback suaveCtx.Config
 
       // Final fallback
       NOT_FOUND "Resource not found"

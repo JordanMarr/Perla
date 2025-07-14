@@ -126,7 +126,7 @@ module LiveReload =
 module SpaFallback =
 
   /// Create SPA fallback webpart
-  val spaFallback: config: PerlaConfig -> WebPart
+  val spaFallback: configA: PerlaConfig aval -> WebPart
 
 /// Perla-specific request handlers
 module PerlaHandlers =
@@ -144,14 +144,12 @@ module PerlaHandlers =
   val mochaRunner: fsManager: PerlaFsManager -> WebPart
 
   /// Index page handler
-  val indexHandler: config: PerlaConfig * fsManager: PerlaFsManager -> WebPart
+  val indexHandler:
+    configA: PerlaConfig aval * fsManager: PerlaFsManager -> WebPart
 
   /// Testing index page handler
   val testingIndexHandler:
-    config: PerlaConfig *
-    fsManager: PerlaFsManager *
-    importMap: Perla.PkgManager.ImportMap ->
-      WebPart
+    configA: PerlaConfig aval * fsManager: PerlaFsManager -> WebPart
 
   /// Environment variables endpoint handler
   val envHandler: fsManager: PerlaFsManager -> logger: ILogger -> WebPart
@@ -171,8 +169,7 @@ module TestingHandlers =
 
   /// Testing events POST endpoint
   val testingEvents:
-    logger: ILogger * testEvents: System.Reactive.Subjects.ISubject<TestEvent> ->
-      WebPart
+    logger: ILogger * testEvents: ISubject<TestEvent> -> WebPart
 
 /// Main Suave server configuration and startup
 module SuaveServer =

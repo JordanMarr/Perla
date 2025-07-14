@@ -538,7 +538,6 @@ module Handlers =
     let document =
       (browserCtx.GetService<IHtmlParser>() |> nonNull).ParseDocument index
 
-    let map = container.FsManager.ResolveImportMap |> AVal.force
 
     // at this point all of the files in the tempDir should have gone through esbuild if it was enabled
     // but as individual files, not as a bundle
@@ -549,13 +548,12 @@ module Handlers =
       yield! standalonePaths
     }
 
-    // TODO: make sure the import map is correct and that it includes the "paths" map
-    let indexContent = Build.Index(document, map, jsPaths, cssPaths)
+    let map =
+      container.FsManager.ResolveImportMap
+      |> ImportMaps.withPathsA container.Configuration.PerlaConfig
+      |> AVal.force
 
-    // TODO: check the copy globs logic
-    // we've changed the virtual file system so we need to re-evaluate how we're copying the blobs
-    // specially the vfs:<glob>
-    container.FsManager.CopyGlobs(config.build, tempDir)
+    let indexContent = Build.Index(document, map, jsPaths, cssPaths)
 
     do!
       File.WriteAllTextAsync(
@@ -574,6 +572,9 @@ module Handlers =
         config.build.outDir,
         ex.Message
       )
+
+    // At this point the outdir should be available, we can safely copy things out.
+    container.FsManager.CopyGlobs config.build
 
     // TODO: evauate the bundle and minification usage here
     // at this point our original index file is still pointing to the entrypoints

@@ -41,6 +41,7 @@
     <Compile Include="VirtualFileSystem.fs" />
     <Compile Include="Fable.fsi" />
     <Compile Include="Fable.fs" />
+    <Compile Include="ImportMaps.fs" />
     <Compile Include="Build.fsi" />
     <Compile Include="Build.fs" />
     <Compile Include="Scaffolding.fsi" />
