@@ -29,7 +29,7 @@ type DecodedTemplateConfigItem = {
   id: string
   name: string
   path: string<SystemPath>
-  shortName: string
+  shortname: string
   description: string option
 }
 
@@ -320,7 +320,7 @@ module internal Encoders =
 
 let DefaultJsonOptions() =
   JsonSerializerOptions(
-    WriteIndented = false,
+    WriteIndented = true,
     AllowTrailingCommas = true,
     ReadCommentHandling = JsonCommentHandling.Skip,
     UnknownTypeHandling = JsonUnknownTypeHandling.JsonElement,

@@ -12,12 +12,13 @@ open Perla.Units
 open Perla.Json
 open Perla.Database
 open Perla
+open Perla.Logger
 
 // Test helpers
 module TestHelpers =
   let createLogger() =
     let loggerFactory =
-      LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
+      LoggerFactory.Create(fun builder -> builder.AddPerlaLogger() |> ignore)
 
     loggerFactory.CreateLogger<PerlaDatabase>()
 
@@ -85,14 +86,14 @@ module TestHelpers =
         id = "basic"
         name = "Basic Template"
         path = UMX.tag<SystemPath> "templates/basic"
-        shortName = "basic"
+        shortname = "basic"
         description = Some "A basic web template"
       }
       {
         id = "advanced"
         name = "Advanced Template"
         path = UMX.tag<SystemPath> "templates/advanced"
-        shortName = "advanced"
+        shortname = "advanced"
         description = Some "An advanced web template"
       }
     |]

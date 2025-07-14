@@ -4,12 +4,11 @@ open System
 open System.IO
 open Microsoft.Extensions.Logging
 open Xunit
-open Perla.Types
+open Perla
 open Perla.Units
 open Perla.Scaffolding
 open Perla.Json
-open Perla
-open IcedTasks
+open Perla.Logger
 open FSharp.UMX
 
 // Test helpers
@@ -30,7 +29,7 @@ module TestHelpers =
 
   let createLogger() =
     let loggerFactory =
-      LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
+      LoggerFactory.Create(fun builder -> builder.AddPerlaLogger() |> ignore)
 
     loggerFactory.CreateLogger("ScaffoldingTests")
 
@@ -45,14 +44,14 @@ module TestHelpers =
       {
         id = "basic"
         name = "Basic Template"
-        shortName = "basic"
+        shortname = "basic"
         description = Some "Basic web template"
         path = UMX.tag<SystemPath> "basic"
       }
       {
         id = "advanced"
         name = "Advanced Template"
-        shortName = "adv"
+        shortname = "adv"
         description = Some "Advanced web template"
         path = UMX.tag<SystemPath> "advanced"
       }
@@ -161,7 +160,7 @@ let ``TemplateConfigItem from sample should have correct structure``() =
 
   let basicTemplate = config.templates |> Seq.find(fun t -> t.id = "basic")
   Assert.Equal("Basic Template", basicTemplate.name)
-  Assert.Equal("basic", basicTemplate.shortName)
+  Assert.Equal("basic", basicTemplate.shortname)
   Assert.Equal(Some "Basic web template", basicTemplate.description)
 
 [<Fact>]

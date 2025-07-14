@@ -4,12 +4,13 @@ open System
 open System.IO
 open Microsoft.Extensions.Logging
 open Xunit
+open Perla
 open Perla.Types
+open Perla.Json
 open Perla.Units
 open Perla.FileSystem
 open Perla.RequestHandler
-open Perla
-open Perla.Json
+open Perla.Logger
 open IcedTasks
 open FSharp.UMX
 open FSharp.Data.Adaptive
@@ -46,7 +47,7 @@ module TestHelpers =
 
   let createLogger() =
     let loggerFactory =
-      LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
+      LoggerFactory.Create(fun builder -> builder.AddPerlaLogger() |> ignore)
 
     loggerFactory.CreateLogger("FileSystemTests")
 
@@ -580,7 +581,7 @@ let ``ResolveOfflineTemplatesConfig should return decoded template configuration
     let template = config.templates |> Seq.head
     Assert.Equal("test-template", template.id)
     Assert.Equal("Test Template", template.name)
-    Assert.Equal("test", template.shortName)
+    Assert.Equal("test", template.shortname)
     Assert.Equal(Some "A test template", template.description)
   }
 

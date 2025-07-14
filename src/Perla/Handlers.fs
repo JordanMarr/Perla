@@ -38,7 +38,7 @@ open Perla.Configuration
 open Perla.Logger
 open Perla.PkgManager
 open Perla.PkgManager.PkgManager
-open Perla.Server
+open Perla.SuaveService
 
 [<Struct; RequireQualifiedAccess>]
 type ListFormat =
@@ -141,12 +141,14 @@ module RunNew =
     tplList
     |> Seq.tryPick(fun tpl ->
       let byId =
-        id |> Option.bind(fun id -> if tpl.id = id then Some tpl else None)
+        id
+        |> Option.bind(fun id ->
+          if $"perla.templates.{tpl.id}" = id then Some tpl else None)
 
       let byShortName =
         name
         |> Option.bind(fun shortName ->
-          if tpl.shortName = shortName then Some tpl else None)
+          if tpl.shortname = shortName then Some tpl else None)
 
       byId |> Option.orElse byShortName)
 
@@ -157,20 +159,27 @@ module RunNew =
     let progress = AnsiConsole.Progress()
     let files = sourcePath.GetFiles("*", SearchOption.AllDirectories)
 
+    let targetDir = DirectoryInfo(UMX.untag targetPath)
+    targetDir.Create()
+
     progress.Start(fun ctx ->
       let tsk =
         ctx.AddTask("Creating project...", true, maxValue = files.Length)
 
       files
       |> Array.Parallel.iter(fun file ->
-        let targetPath =
-          file.FullName.Replace(sourcePath.FullName, UMX.untag targetPath)
+        // Compute the relative path from the source root
+        let relPath = Path.GetRelativePath(sourcePath.FullName, file.FullName)
+        let destPath = Path.Combine(UMX.untag targetPath, relPath)
 
-        match file.Directory with
-        | null -> ()
-        | directory -> directory.Create()
+        destPath
+        |> Path.GetDirectoryName
+        |> nonNull
+        |> Path.GetFullPath
+        |> Directory.CreateDirectory
+        |> ignore
 
-        File.Copy(file.FullName, UMX.untag targetPath, true)
+        File.Copy(file.FullName, destPath, true)
         tsk.Increment 1)
 
       tsk.StopTask())
@@ -267,7 +276,7 @@ module Handlers =
         logger.LogInformation(
           "Found template '{name}' with short name '{shortName}'",
           found.name,
-          found.shortName
+          found.shortname
         )
 
         RunNew.writeFoundDecodedTemplate
@@ -282,7 +291,7 @@ module Handlers =
             .Title("Select a template to create a new project:")
             .EnableSearch()
             .UseConverter(fun (tpl: DecodedTemplateConfigItem) ->
-              $"{tpl.name} ({tpl.shortName}) - {tpl.description}")
+              $"{tpl.name} ({tpl.shortname}) - {tpl.description}")
             .AddChoices(templates)
 
         let! selected = AnsiConsole.PromptAsync(prompt, token)
@@ -587,19 +596,15 @@ module Handlers =
     if options.enablePreview then
       container.Logger.LogInformation "Starting a preview server for the build"
 
-      let app =
-        Server.Server.GetStaticServer container.Configuration.PerlaConfig
-
-      do! app.StartAsync token
-
-      app.Urls
-      |> Seq.iter(fun url ->
-        container.Logger.LogInformation("Listening at: {url}", url))
-
-      while not token.IsCancellationRequested do
-        do! Async.Sleep 1000
-
-      do! app.StopAsync token
+      SuaveServer.startStaticServer
+        {
+          Logger = container.Logger
+          VirtualFileSystem = container.VirtualFileSystem
+          Config = container.Configuration.PerlaConfig
+          FsManager = container.FsManager
+          FileChangedEvents = container.VirtualFileSystem.FileChanges
+        }
+        token
 
     return 0
   }
@@ -621,28 +626,6 @@ module Handlers =
       })
 
     let config = configA |> AVal.force
-
-    let esbuildPlugin =
-      config.plugins
-      |> List.tryFind(fun p ->
-        p.Equals(
-          Constants.PerlaEsbuildPluginName,
-          StringComparison.InvariantCultureIgnoreCase
-        ))
-      |> Option.map(fun _ -> container.EsbuildService.GetPlugin config.esbuild)
-
-    let plugins = container.FsManager.ResolvePluginPaths()
-
-    container.ExtensibilityService.LoadPlugins(
-      plugins,
-      ?esbuildPlugin = esbuildPlugin
-    )
-    |> Result.teeError(fun err ->
-      container.Logger.LogError("Failed to load plugins: {error}", err))
-    |> Result.ignore
-    |> Result.ignoreError
-
-    let mountedDirectories = config.mountDirectories
     let fableConfig = config.fable
 
     let mutable isFableFirstRunDone = fableConfig.IsSome && false
@@ -675,71 +658,58 @@ module Handlers =
 
       isFableFirstRunDone <- true
 
-    do!
-      container.Logger.Spinner(
-        "Mounting Virtual File System",
-        container.VirtualFileSystem.Load mountedDirectories
-      )
-
-    let mutable server =
-      Server.GetServerApp(
-        configA,
-        container.VirtualFileSystem,
-        container.VirtualFileSystem.FileChanges,
-        Observable.empty,
-        container.FsManager
-      )
-
     while not cancellationToken.IsCancellationRequested
           && not isFableFirstRunDone do
       do! Async.Sleep(TimeSpan.FromMilliseconds(100.))
 
-    do! server.StartAsync(cancellationToken)
+    if cancellationToken.IsCancellationRequested then
+      container.Logger.LogInformation(
+        "Fable service cancelled before starting."
+      )
 
-    server.Urls
-    |> Seq.iter(fun url ->
-      container.Logger.LogInformation("Listening at: {url}", url))
+      return 0
+    else
 
-    use _ =
-      container.FsManager.PerlaConfiguration.AddCallback
-        (fun (config: PerlaConfig) ->
-          let port, host, useSSL =
-            configA
-            |> AVal.map(fun config ->
-              config.devServer.port,
-              config.devServer.host,
-              config.devServer.useSSL)
-            |> AVal.force
+      let esbuildPlugin =
+        config.plugins
+        |> List.tryFind(fun p ->
+          p.Equals(
+            Constants.PerlaEsbuildPluginName,
+            StringComparison.InvariantCultureIgnoreCase
+          ))
+        |> Option.map(fun _ ->
+          container.EsbuildService.GetPlugin config.esbuild)
 
-          if
-            port <> config.devServer.port
-            || config.devServer.host <> host
-            || config.devServer.useSSL <> useSSL
-          then
-            container.Logger.LogInformation
-              "Server configuration changed, restarting server..."
+      let plugins = container.FsManager.ResolvePluginPaths()
 
-            let work = asyncEx {
-              do! server.StopAsync cancellationToken
+      container.ExtensibilityService.LoadPlugins(
+        plugins,
+        ?esbuildPlugin = esbuildPlugin
+      )
+      |> Result.teeError(fun err ->
+        container.Logger.LogError("Failed to load plugins: {error}", err))
+      |> Result.ignore
+      |> Result.ignoreError
 
-              server <-
-                Server.GetServerApp(
-                  configA,
-                  container.VirtualFileSystem,
-                  container.VirtualFileSystem.FileChanges,
-                  Observable.empty,
-                  container.FsManager
-                )
+      let mountedDirectories = config.mountDirectories
 
-              do! server.StartAsync cancellationToken
-            }
+      do!
+        container.Logger.Spinner(
+          "Mounting Virtual File System",
+          container.VirtualFileSystem.Load mountedDirectories
+        )
 
-            Async.StartImmediate(work, cancellationToken))
+      SuaveServer.startServer
+        (SuaveContext {
+          Logger = container.Logger
+          VirtualFileSystem = container.VirtualFileSystem
+          Config = configA
+          FsManager = container.FsManager
+          FileChangedEvents = container.VirtualFileSystem.FileChanges
+        })
+        cancellationToken
 
-    while not cancellationToken.IsCancellationRequested do
-      do! Async.Sleep(TimeSpan.FromSeconds(1.))
-
-    return 0
+      return 0
   }
 
   let runTesting (container: AppContainer) (options: TestingOptions) = cancellableTask {
