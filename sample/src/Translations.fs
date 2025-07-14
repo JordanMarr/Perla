@@ -3,7 +3,6 @@
 open System
 open Fable.Core
 open Types
-open Sutil
 
 let private translations = JsInterop.importDefault "./translations.json?js"
 

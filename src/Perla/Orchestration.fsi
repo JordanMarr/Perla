@@ -11,7 +11,6 @@ open Perla
 open Perla.Types
 open Perla.Database
 open Perla.RequestHandler
-open Perla
 open Perla.FileSystem
 open Perla.Fable
 open Perla.Esbuild

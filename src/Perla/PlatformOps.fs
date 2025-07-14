@@ -1,6 +1,5 @@
 namespace Perla
 
-open System
 open System.IO
 open System.Text
 open System.Runtime.InteropServices
@@ -361,7 +360,7 @@ module PlatformOps =
                   |> ignore)
                 .WithValidation(CommandResultValidation.None)
 
-            let! result = command.ExecuteAsync(cancellationToken = token)
+            let! _ = command.ExecuteAsync(cancellationToken = token)
             return Encoding.UTF8.GetString(writer.ToArray())
           }
 
@@ -381,12 +380,12 @@ module PlatformOps =
                 .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
                 .WithArguments(fun argsBuilder ->
                   argsBuilder.Add(entrypoint).Add("--bundle")
-                  |> (if minify then fun a -> a.Add("--minify") else id)
-                  |> fun a -> a.Add($"--outdir={outdir}")
+                  |> (if minify then _.Add("--minify") else id)
+                  |> _.Add($"--outdir={outdir}")
                   |> buildEsbuildFileLoaders fileLoaders
                   |> ignore)
 
-            let! result = command.ExecuteAsync(cancellationToken = token)
+            let! _ = command.ExecuteAsync(cancellationToken = token)
             return ()
           }
 
@@ -409,11 +408,11 @@ module PlatformOps =
                 .WithArguments(fun argsBuilder ->
                   argsBuilder.Add(entrypoint)
                   |> buildEsbuildConfig config
-                  |> fun a -> a.Add($"--outdir={outdir}")
+                  |> _.Add($"--outdir={outdir}")
                   |> buildEsbuildFileLoaders config.fileLoaders
                   |> ignore)
 
-            let! result = command.ExecuteAsync(cancellationToken = token)
+            let! _ = command.ExecuteAsync(cancellationToken = token)
             return ()
           }
     }

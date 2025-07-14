@@ -3,9 +3,7 @@ namespace Perla.SuaveService
 open System
 open Microsoft.Extensions.Logging
 open System.Reactive.Subjects
-open Perla
 open Perla.Types
-open Perla.Units
 open Perla.VirtualFs
 open Perla.FileSystem
 open FSharp.Data.Adaptive
@@ -97,17 +95,17 @@ module VirtualFiles =
 module LiveReload =
 
   /// Create reload message for file changes
-  val createReloadMessage: event: FileChangedEvent -> Suave.EventSource.Message
+  val createReloadMessage: event: FileChangedEvent -> EventSource.Message
 
   /// Create HMR message for CSS files
   val createHmrMessage:
-    event: FileChangedEvent -> file: FileContent -> Suave.EventSource.Message
+    event: FileChangedEvent -> file: FileContent -> EventSource.Message
 
   /// Create live reload message (HMR for CSS, reload for others)
   val createLiveReloadMessage:
     vfs: VirtualFileSystem ->
     event: FileChangedEvent ->
-      Suave.EventSource.Message
+      EventSource.Message
 
   /// Internal: Pure function to create reload event data (for testing)
   val internal createReloadEventData: event: FileChangedEvent -> string

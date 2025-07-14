@@ -1,11 +1,8 @@
 namespace Perla
 
-open System
-open System.Threading.Tasks
 open LiteDB
 open FSharp.UMX
 open IcedTasks
-open Perla.Types
 open Perla.FileSystem
 open Perla.Database
 

@@ -124,13 +124,13 @@ module Build =
 
     // remove any existing entry points, we don't need them at this point
     document.QuerySelectorAll("[data-entry-point][type=module]")
-    |> Seq.iter(fun f -> f.Remove())
+    |> Seq.iter(_.Remove())
 
     document.QuerySelectorAll("[data-entry-point=standalone][type=module]")
-    |> Seq.iter(fun f -> f.Remove())
+    |> Seq.iter(_.Remove())
 
     document.QuerySelectorAll("[data-entry-point][rel=stylesheet]")
-    |> Seq.iter(fun f -> f.Remove())
+    |> Seq.iter(_.Remove())
 
     // insert the resolved entry points which should match paths in mounted directories
     insertJsFiles(document, jsExtras)

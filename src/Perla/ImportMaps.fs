@@ -47,9 +47,9 @@ module ImportMaps =
       combinedPattern,
       fun (m: Match) ->
         let moduleName =
-          if m.Groups.[1].Success then m.Groups.[1].Value
-          elif m.Groups.[2].Success then m.Groups.[2].Value
-          elif m.Groups.[4].Success then m.Groups.[4].Value
+          if m.Groups[1].Success then m.Groups[1].Value
+          elif m.Groups[2].Success then m.Groups[2].Value
+          elif m.Groups[4].Success then m.Groups[4].Value
           else ""
 
         let prefixOpt =
@@ -79,7 +79,7 @@ module ImportMaps =
         let replaced = replaceImports paths file.content
         { file with content = replaced }
 
-    plugin "perla-paths-replacer-plugin" {
+    plugin Constants.PerlaPathsReplacerPluginName {
       should_process_file shouldTransform
       with_transform transform
     }

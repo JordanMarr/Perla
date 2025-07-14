@@ -4,11 +4,8 @@ open IcedTasks
 
 open Perla
 open Perla.Types
-open Perla.Units
 
 open FSharp.Control
-open FSharp.Control.Reactive
-open FSharp.UMX
 open System.Collections.Generic
 open Microsoft.Extensions.Logging
 open System.Threading

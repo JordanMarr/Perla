@@ -6,7 +6,6 @@ open IcedTasks
 open FSharp.UMX
 open Perla
 open Perla.Units
-open Perla
 
 [<Interface>]
 type RequestHandler =

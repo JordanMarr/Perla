@@ -70,10 +70,10 @@ type FakeJspmService
     )
 
   interface JspmService with
-    member _.Install(options, ?cancellationToken) =
+    member _.Install(_, _) =
       Task.FromResult(defaultArg installResponse defaultInstallResponse)
 
-    member _.Update(options, ?cancellationToken) =
+    member _.Update(options, _) =
       // Simulate adding/updating packages in the import map
       let inputMap =
         match options.TryGetValue("inputMap") with
@@ -89,7 +89,7 @@ type FakeJspmService
         updateSet
         |> Seq.fold
           (fun acc pkg ->
-            acc |> Map.add pkg ($"https://ga.jspm.io/npm:{pkg}/index.js"))
+            acc |> Map.add pkg $"https://ga.jspm.io/npm:{pkg}/index.js")
           inputMap.imports
 
       let newMap = {
@@ -104,7 +104,7 @@ type FakeJspmService
 
       Task.FromResult(defaultArg updateResponse resp)
 
-    member _.Uninstall(options, ?cancellationToken) =
+    member _.Uninstall(options, _) =
       // Simulate removing packages from the import map
       let inputMap =
         match options.TryGetValue("inputMap") with
@@ -131,7 +131,7 @@ type FakeJspmService
 
       Task.FromResult(defaultArg uninstallResponse resp)
 
-    member _.Download(packages, options, ?cancellationToken) =
+    member _.Download(_, _, ?cancellationToken) =
       Task.FromResult(defaultArg downloadResponse defaultDownloadResponse)
 
 module ImportMapTests =
@@ -162,7 +162,7 @@ module ImportMapTests =
       config = pkgManagerConfig
     }
 
-    PkgManager.create dependencies
+    create dependencies
 
   [<Fact>]
   let ``install should create proper request with packages``() = taskUnit {
@@ -317,19 +317,19 @@ module ImportMapTests =
     // Act & Assert - Exact matches
     let reactResult = importMap.FindDependency("react")
     Assert.True(reactResult.IsSome)
-    let (name, version) = reactResult.Value
+    let name, version = reactResult.Value
     Assert.Equal("react", name)
     Assert.Equal("18.2.0", version.Value)
 
     let reactDomResult = importMap.FindDependency("react-dom")
     Assert.True(reactDomResult.IsSome)
-    let (name2, version2) = reactDomResult.Value
+    let name2, version2 = reactDomResult.Value
     Assert.Equal("react-dom", name2)
     Assert.Equal("18.2.0", version2.Value)
 
     let babelResult = importMap.FindDependency("@babel/core")
     Assert.True(babelResult.IsSome)
-    let (name3, version3) = babelResult.Value
+    let name3, version3 = babelResult.Value
     Assert.Equal("@babel/core", name3)
     Assert.Equal("7.20.0", version3.Value)
 
@@ -371,13 +371,13 @@ module ImportMapTests =
     // Act & Assert - Case insensitive matching
     let reactResult = importMap.FindDependency("react")
     Assert.True(reactResult.IsSome)
-    let (name, version) = reactResult.Value
+    let name, version = reactResult.Value
     Assert.Equal("React", name) // Should return the original key
     Assert.Equal("18.2.0", version.Value)
 
     let lodashResult = importMap.FindDependency("lodash")
     Assert.True(lodashResult.IsSome)
-    let (name2, version2) = lodashResult.Value
+    let name2, version2 = lodashResult.Value
     Assert.Equal("LODASH", name2)
     Assert.Equal("4.17.21", version2.Value)
 
@@ -400,7 +400,7 @@ module ImportMapTests =
 
     let lodashResult = importMap.FindDependency("lodash")
     Assert.True(lodashResult.IsSome) // Should find this one with version
-    let (name, version) = lodashResult.Value
+    let name, version = lodashResult.Value
     Assert.Equal("lodash", name)
     Assert.Equal("4.17.21", version.Value)
 
@@ -525,6 +525,6 @@ module ImportMapTests =
     let result = importMap.FindDependency("solid-js/web")
     // Assert
     Assert.True(result.IsSome)
-    let (name, version) = result.Value
+    let name, version = result.Value
     Assert.Equal("solid-js/web", name)
     Assert.Equal("1.9.7", version.Value)

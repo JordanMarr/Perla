@@ -1,6 +1,5 @@
 namespace Perla.FileSystem
 
-open System.Text.Json.Nodes
 
 open Microsoft.Extensions.Logging
 
@@ -51,7 +50,7 @@ type PerlaFsManager =
   abstract SavePerlaConfig: config: PerlaConfig -> CancellableTask<unit>
 
   abstract SavePerlaConfig:
-    updates: Perla.Json.PerlaConfig.PerlaWritableField seq ->
+    updates: PerlaConfig.PerlaWritableField seq ->
       CancellableTask<unit>
 
   abstract SetupEsbuild: string<Semver> -> CancellableTask<unit>

@@ -1,13 +1,11 @@
 module Perla.Tests.Database
 
-open System
 open System.IO
 open Microsoft.Extensions.Logging
 open Xunit
 open LiteDB
 open FSharp.UMX
 
-open Perla.Types
 open Perla.Units
 open Perla.Json
 open Perla.Database
@@ -45,7 +43,7 @@ module TestHelpers =
     getConnection, cleanup
 
   let createInMemoryConnection() =
-    let db, cleanup = createTempDatabaseConnection()
+    let db, _ = createTempDatabaseConnection()
     db
 
   let createTempConnection() =
@@ -386,7 +384,7 @@ module IntegrationTests =
 
     // Test CheckRepository workflow
     Assert.False(database.Checks.IsSetupPresent())
-    let setupId = database.Checks.SaveSetup()
+    let _ = database.Checks.SaveSetup()
     Assert.True(database.Checks.IsSetupPresent())
 
     // Test TemplateRepository workflow

@@ -240,7 +240,6 @@ module GeneratorOption =
 
 module DownloadResponse =
   open JDeck
-  open JDeck.Encoding
 
   let private downloadPackageDecoder: Decoder<DownloadPackage> =
     fun element -> decode {

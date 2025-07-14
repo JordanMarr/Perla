@@ -1,8 +1,5 @@
 ﻿namespace Perla.Esbuild
 
-open System
-open System.IO
-open System.Runtime.InteropServices
 
 open IcedTasks
 open FSharp.UMX
@@ -11,10 +8,8 @@ open FSharp.Data.Adaptive
 open Perla
 open Perla.Types
 open Perla.Units
-open Perla.Logger
 open Perla.FileSystem
 open Perla.Plugins
-open System.Text
 
 [<RequireQualifiedAccess; Struct>]
 type LoaderType =
@@ -45,8 +40,6 @@ type EsbuildService =
 
 [<RequireQualifiedAccess>]
 module Esbuild =
-  open Microsoft.Extensions.Logging
-  open System.Threading.Tasks
 
   let singleFileCmd
     (

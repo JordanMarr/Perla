@@ -3,17 +3,13 @@ namespace Perla.Handlers
 open System
 open System.IO
 
-open System.Threading
-open System.Threading.Tasks
 open Microsoft.Extensions.Logging
-open Microsoft.Playwright
 
 open AngleSharp
 open AngleSharp.Html.Parser
 open Spectre.Console
 
 open FSharp.Control
-open FSharp.Control.Reactive
 open FSharp.Data.Adaptive
 
 open IcedTasks
@@ -165,7 +161,7 @@ module RunNew =
   let writeFoundDecodedTemplate
     (FsManager fsManager & Directories directories)
     (
-      config: DecodedTemplateConfiguration,
+      _: DecodedTemplateConfiguration,
       tpl: DecodedTemplateConfigItem,
       targetPath: string<SystemPath>
     ) =
@@ -608,7 +604,7 @@ module Handlers =
                   host = defaultArg options.host config.devServer.host
                   useSSL = defaultArg options.ssl config.devServer.useSSL
             }
-            esbuild = { config.esbuild with minify = false }
+            esbuild.minify = false
       })
 
     let config = configA |> AVal.force
@@ -700,7 +696,7 @@ module Handlers =
       return 0
   }
 
-  let runTesting (container: AppContainer) (options: TestingOptions) = cancellableTask {
+  let runTesting (_: AppContainer) (_: TestingOptions) = cancellableTask {
     // let! cancellationToken = CancellableTask.getCancellationToken()
 
     // ConfigurationManager.UpdateFromCliArgs(
@@ -895,7 +891,7 @@ module Handlers =
     let packages =
       if config.useLocalPkgs then
         config.dependencies
-        |> Set.map(fun ({ package = package; version = version }) ->
+        |> Set.map(fun { package = package; version = version } ->
           package, Some(UMX.untag version))
       else
         // Otherwise, we start with an empty set of packages

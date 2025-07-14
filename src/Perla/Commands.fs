@@ -1,16 +1,13 @@
 namespace Perla.Commands
 
-open System.Threading
 
 open System.CommandLine
-open System.CommandLine.Invocation
 open System.CommandLine.Parsing
 open Microsoft.Extensions.Logging
 
 open IcedTasks
 
 open Perla
-open Perla.Extensibility
 open Perla.Types
 open Perla.Handlers
 open Perla.Warmup
@@ -80,7 +77,7 @@ type PerlaArguments =
   static member Properties: Argument<string array> =
     let parser(result: ArgumentResult) =
       result.Tokens
-      |> Seq.map(fun token -> token.Value)
+      |> Seq.map(_.Value)
       |> Seq.distinct
       |> Seq.toArray
 
@@ -124,7 +121,7 @@ module GlobalOptions =
     |> description "Allows running a command before its officia release"
     |> defaultValue false
 
-  let bind(parseResult) = {
+  let bind parseResult = {
     ci = ci.GetValue parseResult
     skipPrompts = skipPrompts.GetValue parseResult
     previewCommand = previewCommand.GetValue parseResult
@@ -137,7 +134,7 @@ module GlobalOptions =
 module SharedInputs =
 
   let source: ActionInput<Perla.PkgManager.DownloadProvider voption> =
-    PerlaOptions.PackageSource |> Input.ofOption
+    PerlaOptions.PackageSource |> ofOption
 
 [<RequireQualifiedAccess>]
 module DescribeInputs =
@@ -152,7 +149,7 @@ module DescribeInputs =
         "A property, properties or json path-like string names to describe"
       , Arity = ArgumentArity.ZeroOrMore
     )
-    |> Input.ofArgument
+    |> ofArgument
 
   let describeCurrent: ActionInput<bool> =
     option "--current"
@@ -223,7 +220,7 @@ module TemplateInputs =
     |> description "If it exists, removes the template repository for Perla"
 
   let displayMode: ActionInput<ListFormat> =
-    PerlaOptions.DisplayMode |> Input.ofOption
+    PerlaOptions.DisplayMode |> ofOption
 
 [<RequireQualifiedAccess>]
 module ProjectInputs =
@@ -259,7 +256,7 @@ module BuildInputs =
 [<RequireQualifiedAccess>]
 module TestingInputs =
   let browsers: ActionInput<Browser Set> =
-    PerlaOptions.Browsers |> Input.ofOption
+    PerlaOptions.Browsers |> ofOption
 
   let files: ActionInput<string array> =
     option "--tests"
@@ -331,7 +328,7 @@ module Commands =
              container.Db,
              container.Configuration.PerlaConfig,
              container.FableService,
-             [ Warmup.Esbuild; Warmup.Fable ])
+             [ Esbuild; Fable ])
             context.CancellationToken
 
         match result with
@@ -373,7 +370,7 @@ module Commands =
       description "Builds the SPA application for distribution"
       addAlias "b"
 
-      inputs(Input.context, BuildInputs.preview)
+      inputs(context, BuildInputs.preview)
 
       setAction handleCommand
     }
@@ -401,7 +398,7 @@ module Commands =
                container.Db,
                container.Configuration.PerlaConfig,
                container.FableService,
-               [ Warmup.Fable; Warmup.Esbuild ])
+               [ Fable; Esbuild ])
               context.CancellationToken
 
           match result with
@@ -445,7 +442,7 @@ module Commands =
       description desc
       addAliases [ "s"; "start" ]
 
-      inputs(Input.context, ServeInputs.port, ServeInputs.host, ServeInputs.ssl)
+      inputs(context, ServeInputs.port, ServeInputs.host, ServeInputs.ssl)
 
       setAction handleCommand
     }
@@ -453,7 +450,7 @@ module Commands =
   let RemovePackage(container: AppContainer) =
 
     let handleCommand
-      (ctx: ActionContext, package: string, alias: string option)
+      (ctx: ActionContext, package: string, _: string option)
       =
       let options = { package = package }
       Handlers.runRemovePackage container options ctx.CancellationToken
@@ -461,7 +458,7 @@ module Commands =
     command "remove" {
       description "Removes a package from the project dependencies"
 
-      inputs(Input.context, PackageInputs.package, PackageInputs.alias)
+      inputs(context, PackageInputs.package, PackageInputs.alias)
       setAction handleCommand
     }
 
@@ -481,7 +478,7 @@ module Commands =
 
     command "install" {
       description "Installs the project dependencies from the perla.json file"
-      inputs(Input.context, PackageInputs.offline, SharedInputs.source)
+      inputs(context, PackageInputs.offline, SharedInputs.source)
       setAction handleCommand
     }
 
@@ -497,7 +494,7 @@ module Commands =
     command "add" {
       description "Adds a package to the project dependencies"
 
-      inputs(Input.context, PackageInputs.package, PackageInputs.version)
+      inputs(context, PackageInputs.package, PackageInputs.version)
 
       setAction handleCommand
     }
@@ -524,7 +521,7 @@ module Commands =
       description
         "Lists the current dependencies in a table or an npm style json string"
 
-      inputs(Input.context, PackageInputs.showAsNpm)
+      inputs(context, PackageInputs.showAsNpm)
       setAction handleCommand
     }
 
@@ -631,7 +628,7 @@ module Commands =
         "Handles Template Repository operations such as list, add, update, and remove templates"
 
       inputs(
-        Input.context,
+        context,
         TemplateInputs.repositoryName,
         TemplateInputs.addTemplate,
         TemplateInputs.updateTemplate,
@@ -675,7 +672,7 @@ module Commands =
                container.Db,
                container.Configuration.PerlaConfig,
                container.FableService,
-               [ Warmup.Esbuild; Warmup.Fable ])
+               [ Esbuild; Fable ])
               ctx.CancellationToken
 
           match result with
@@ -719,7 +716,7 @@ module Commands =
         "Creates a new project based on the selected template if it exists"
 
       inputs(
-        Input.context,
+        context,
         ProjectInputs.projectName,
         ProjectInputs.byId,
         ProjectInputs.byShortName,
@@ -760,7 +757,7 @@ module Commands =
       description "Runs client side tests in a headless browser"
 
       inputs(
-        Input.context,
+        context,
         TestingInputs.browsers,
         TestingInputs.files,
         TestingInputs.skips,
@@ -792,7 +789,7 @@ module Commands =
         "Describes the perla.json file or it's properties as requested"
 
       inputs(
-        Input.context,
+        context,
         DescribeInputs.perlaProperties,
         DescribeInputs.describeCurrent
       )

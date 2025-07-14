@@ -5,7 +5,6 @@ open System.Collections.Concurrent
 open System.IO
 
 open Perla.Units
-open Perla.Logger
 open Perla.Plugins
 open Perla.Extensibility
 
@@ -206,7 +205,7 @@ module VirtualFs =
 
         // Get all available plugins and run them
         let allPlugins = extensibility.GetAllPlugins()
-        let pluginOrder = allPlugins |> List.map(fun p -> p.name)
+        let pluginOrder = allPlugins |> List.map(_.name)
 
         logger.LogTrace(
           "Running {PluginCount} plugins for {Extension}: {PluginNames}",
@@ -269,7 +268,7 @@ module VirtualFs =
             lastModified = File.GetLastWriteTime(sourcePath)
           }
 
-          files.[targetPath] <- entry
+          files[targetPath] <- entry
           logger.LogTrace("Processed binary file {FilePath}", sourcePath)
         else
           // Read file with FileShare.ReadWrite to avoid lock issues
@@ -340,7 +339,7 @@ module VirtualFs =
             lastModified = File.GetLastWriteTime(sourcePath)
           }
 
-          files.[finalPath] <- entry
+          files[finalPath] <- entry
           logger.LogTrace("Processed text file {FilePath}", sourcePath)
       with ex ->
         logger.LogError(
@@ -670,7 +669,7 @@ module VirtualFs =
 
         member _.Dispose() =
           args.Logger.LogDebug("Disposing virtual file system")
-          connection |> Option.iter(fun c -> c.Dispose())
+          connection |> Option.iter(_.Dispose())
           stopWatching args.Logger watchers ()
           args.Logger.LogDebug("Virtual file system disposed")
     }

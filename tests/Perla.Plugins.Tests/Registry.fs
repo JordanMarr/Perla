@@ -1,13 +1,10 @@
 module Perla.Plugins.Tests.Registry
 
 
-open System
-open System.Collections.Generic
 open System.Threading.Tasks
 
 open Xunit
 
-open FSharp.Compiler.Interactive.Shell
 open IcedTasks
 
 open Perla.Plugins
@@ -101,7 +98,7 @@ module PluginManagerRegistryTests =
     match result with
     | Error(PluginLoadError.AlreadyLoaded _) -> Assert.True(true)
     | Error err -> Assert.Fail $"Expected AlreadyLoaded error, but got %A{err}"
-    | Ok() -> Assert.Fail $"Expected error, but got success"
+    | Ok() -> Assert.Fail "Expected error, but got success"
   }
 
   [<Fact>]
@@ -313,7 +310,7 @@ let Plugin = {{
       let runnables = manager.GetRunnablePlugins([ "runnable"; "non-runnable" ])
 
       Assert.Equal(1, runnables.Length)
-      Assert.Equal("runnable", runnables.[0].plugin.name)
+      Assert.Equal("runnable", runnables[0].plugin.name)
     }
 
   [<Fact>]
@@ -368,7 +365,7 @@ let Plugin = {{
       content = "original"
     }
 
-    let! result = manager.RunPlugins ([ "plugin1"; "plugin2" ]) inputFile
+    let! result = manager.RunPlugins [ "plugin1"; "plugin2" ] inputFile
 
     // Plugins should be applied in order: plugin1 then plugin2
     Assert.Equal("[plugin2] [plugin1] original", result.content)
@@ -559,7 +556,7 @@ let Plugin = {{
       content = "input"
     }
 
-    let! result = manager.RunPlugins ([ "plugin1"; "plugin2" ]) inputFile
+    let! result = manager.RunPlugins [ "plugin1"; "plugin2" ] inputFile
 
     // Both plugins should have processed the file
     Assert.Equal("[plugin2] [plugin1] input", result.content)

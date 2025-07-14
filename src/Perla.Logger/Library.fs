@@ -2,7 +2,6 @@
 
 open System.Threading.Tasks
 open Spectre.Console
-open Spectre.Console.Extensions
 open System
 open System.Runtime.InteropServices
 open Serilog
@@ -212,25 +211,25 @@ type PerlaPrefixEnricher(prefixes: PrefixKind Set) =
       for prefix in prefixes do
         match prefix with
         | Log ->
-          propertyFactory.CreateProperty($"PlLog", Constants.LogPrefix)
+          propertyFactory.CreateProperty("PlLog", Constants.LogPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Scaffold ->
           propertyFactory.CreateProperty(
-            $"PlScaffold",
+            "PlScaffold",
             Constants.ScaffoldPrefix
           )
           |> logEvent.AddPropertyIfAbsent
         | Build ->
-          propertyFactory.CreateProperty($"PlBuild", Constants.BuildPrefix)
+          propertyFactory.CreateProperty("PlBuild", Constants.BuildPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Serve ->
-          propertyFactory.CreateProperty($"PlServe", Constants.ServePrefix)
+          propertyFactory.CreateProperty("PlServe", Constants.ServePrefix)
           |> logEvent.AddPropertyIfAbsent
         | Esbuild ->
-          propertyFactory.CreateProperty($"PlEsbuild", Constants.EsbuildPrefix)
+          propertyFactory.CreateProperty("PlEsbuild", Constants.EsbuildPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Browser ->
-          propertyFactory.CreateProperty($"PlBrowser", Constants.BrowserPrefix)
+          propertyFactory.CreateProperty("PlBrowser", Constants.BrowserPrefix)
           |> logEvent.AddPropertyIfAbsent
 
 // Custom sink to write to Spectre.Console
@@ -319,7 +318,7 @@ open Serilog.Extensions.Logging
 module ILoggerExtensions =
   open Serilog.Context
 
-  type Microsoft.Extensions.Logging.ILogger with
+  type ILogger with
 
 
     member _.Spinner<'Operation>

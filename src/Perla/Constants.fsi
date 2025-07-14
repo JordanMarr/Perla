@@ -55,6 +55,9 @@ val JsonSchemaUrl: string = "https://raw.githubusercontent.com/AngelMunoz/Perla/
 val PerlaEsbuildPluginName: string = "perla-esbuild-plugin"
 
 [<Literal>]
+val PerlaPathsReplacerPluginName: string = "perla-paths-replacer-plugin"
+
+[<Literal>]
 val ArtifactsDirectoryname: string = "perla"
 
 [<Literal>]

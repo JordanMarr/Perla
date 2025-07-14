@@ -1,10 +1,8 @@
 ﻿namespace Perla.Handlers
 
 open IcedTasks
-open FsToolkit.ErrorHandling
 open Perla
 open Perla.Types
-open Perla.Extensibility
 
 
 [<Struct; RequireQualifiedAccess>]

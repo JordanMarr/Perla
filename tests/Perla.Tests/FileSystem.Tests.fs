@@ -79,11 +79,11 @@ type FakePlatformOps
     member _.PlatformString() = platformString
     member _.ArchString() = archString
 
-    member _.CheckDotnetToolVersion(_) = cancellableTask {
+    member _.CheckDotnetToolVersion _ = cancellableTask {
       return toolCheckResult
     }
 
-    member _.InstallDotnetTool(_) = cancellableTask { return toolCheckResult }
+    member _.InstallDotnetTool _ = cancellableTask { return toolCheckResult }
     member _.RunFable(_, _, _) = cancellableTask { return () }
     member _.StreamFable(_, _, _, _) = AsyncSeq.empty |> AsyncSeq.toAsyncEnum
     member _.IsFableAvailable() = cancellableTask { return fableAvailable }
@@ -124,7 +124,7 @@ type FakePerlaDirectories
 
     member _.OriginalCwd = originalCwd
     member _.CurrentWorkingDirectory = tempDir
-    member _.SetCwdToProject(?fromPath) = ()
+    member _.SetCwdToProject(?_fromPath) = ()
 
 type FakeRequestHandler
   (
@@ -137,11 +137,11 @@ type FakeRequestHandler
   let templateStream =
     defaultArg templateStream (fun () -> cancellableTask {
       let memoryStream = new MemoryStream()
-      return memoryStream :> System.IO.Stream
+      return memoryStream :> Stream
     })
 
   interface RequestHandler with
-    member _.DownloadEsbuild(_) = downloadResult()
+    member _.DownloadEsbuild _ = downloadResult()
     member _.DownloadTemplate(_, _, _) = templateStream()
 
 [<Fact>]
@@ -418,7 +418,7 @@ let ``ResolvePluginPaths should return plugin paths when they exist``() =
   let pluginPaths = fsManager.ResolvePluginPaths()
 
   Assert.NotEmpty(pluginPaths)
-  let (path, content) = pluginPaths.[0]
+  let path, content = pluginPaths[0]
   Assert.Contains("test-plugin.fsx", path)
   Assert.Equal(pluginContent, content)
 
@@ -460,19 +460,19 @@ PERLA_debug="enabled" """
 
   // Check that variables from .env file are present
   Assert.True(envContents.ContainsKey("testenvvar"))
-  Assert.Equal("test", envContents.["testenvvar"])
+  Assert.Equal("test", envContents["testenvvar"])
   Assert.True(envContents.ContainsKey("anothervar"))
-  Assert.Equal("value123", envContents.["anothervar"])
+  Assert.Equal("value123", envContents["anothervar"])
   Assert.True(envContents.ContainsKey("boolvar"))
-  Assert.Equal("true", envContents.["boolvar"])
+  Assert.Equal("true", envContents["boolvar"])
 
   // Check that variables from local.env file are present
   Assert.True(envContents.ContainsKey("localtestenvvar"))
-  Assert.Equal("\"localtest\"", envContents.["localtestenvvar"])
+  Assert.Equal("\"localtest\"", envContents["localtestenvvar"])
   Assert.True(envContents.ContainsKey("localport"))
-  Assert.Equal("3000", envContents.["localport"])
+  Assert.Equal("3000", envContents["localport"])
   Assert.True(envContents.ContainsKey("debug"))
-  Assert.Equal("\"enabled\" ", envContents.["debug"])
+  Assert.Equal("\"enabled\" ", envContents["debug"])
 
 [<Fact>]
 let ``SavePerlaConfig with updates should modify existing perla.json file``() = async {
@@ -753,10 +753,7 @@ PERLA_DEBUG=true"""
   let testConfig = {
     Defaults.PerlaConfig with
         envPath = UMX.tag<ServerUrl> "/env.js"
-        build = {
-          Defaults.PerlaConfig.build with
-              outDir = tempDir.Path
-        }
+        build.outDir = tempDir.Path
   }
 
   // Emit the env file
@@ -802,10 +799,7 @@ let ``EmitEnvFile should create empty file when no environment variables exist``
   let testConfig = {
     Defaults.PerlaConfig with
         envPath = UMX.tag<ServerUrl> "/env.js"
-        build = {
-          Defaults.PerlaConfig.build with
-              outDir = tempDir.Path
-        }
+        build.outDir = tempDir.Path
   }
 
   // Emit the env file
@@ -849,10 +843,7 @@ let ``EmitEnvFile should use custom tmpPath when provided``() =
   let testConfig = {
     Defaults.PerlaConfig with
         envPath = UMX.tag<ServerUrl> "/env.js"
-        build = {
-          Defaults.PerlaConfig.build with
-              outDir = tempDir.Path
-        }
+        build.outDir = tempDir.Path
   }
 
   // Emit the env file with custom tmpPath

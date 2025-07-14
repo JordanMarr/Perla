@@ -4,8 +4,6 @@ open System.Text.RegularExpressions
 
 open Spectre.Console
 open Spectre.Console.Rendering
-open FSharp.UMX
-open Perla.Units
 open Perla.Types
 
 [<AutoOpen>]

@@ -10,7 +10,6 @@ open FSharp.Data.Adaptive
 
 open Perla
 open Perla.Types
-open Perla
 open Perla.RequestHandler
 open Perla.FileSystem
 open Perla.Database
@@ -146,7 +145,7 @@ module Warmup =
         logger.LogInformation "Installing templates..."
 
         let user, repo, branch =
-          (parseFullRepositoryName(Some Constants.Default_Templates_Repository))
+          parseFullRepositoryName(Some Constants.Default_Templates_Repository)
             .Value
 
         let! values =
@@ -356,7 +355,7 @@ module AppContainer =
       }
 
     let templateService =
-      Scaffolding.Create {
+      Create {
         PerlaFsManager = fsManager
         Database = database
       }

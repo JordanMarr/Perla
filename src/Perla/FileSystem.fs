@@ -104,10 +104,10 @@ module FileSystem =
   let GetManager(args: PerlaFsManagerArgs) : PerlaFsManager =
     { new PerlaFsManager with
         member _.CopyFiles(sourcePath, targetPath) =
-          let progress = Spectre.Console.AnsiConsole.Progress()
+          let progress = AnsiConsole.Progress()
           let files = sourcePath.GetFiles("*", SearchOption.AllDirectories)
 
-          let targetDir = DirectoryInfo(FSharp.UMX.UMX.untag targetPath)
+          let targetDir = DirectoryInfo(UMX.untag targetPath)
           targetDir.Create()
 
           progress.Start(fun ctx ->
@@ -118,21 +118,21 @@ module FileSystem =
             |> Array.Parallel.iter(fun file ->
               // Compute the relative path from the source root
               let relPath =
-                System.IO.Path.GetRelativePath(
+                Path.GetRelativePath(
                   sourcePath.FullName,
                   file.FullName
                 )
 
               let destPath =
-                System.IO.Path.Combine(
-                  FSharp.UMX.UMX.untag targetPath,
+                Path.Combine(
+                  UMX.untag targetPath,
                   relPath
                 )
 
               destPath
-              |> System.IO.Path.GetDirectoryName
+              |> Path.GetDirectoryName
               |> nonNull
-              |> System.IO.Path.GetFullPath
+              |> Path.GetFullPath
               |> Directory.CreateDirectory
               |> ignore
 
@@ -173,16 +173,15 @@ module FileSystem =
 
             if matchResult.Success then
               Some(
-                matchResult.Groups.["envvarname"].Value,
-                matchResult.Groups.["content"].Value
+                matchResult.Groups["envvarname"].Value,
+                matchResult.Groups["content"].Value
               )
             else
               None
 
           let reduction =
             AdaptiveReduction.fold Map.empty<string, string>
-            <| fun acc next ->
-              Map.fold (fun acc k v -> Map.add k v acc) acc next
+            <| Map.fold (fun acc k v -> Map.add k v acc)
 
           let! dotEnvFilesContent =
             dotEnvFiles
@@ -198,9 +197,9 @@ module FileSystem =
             Environment.GetEnvironmentVariables()
             |> Seq.cast<Collections.DictionaryEntry>
             |> Seq.filter(fun entry ->
-              (nonNull(entry.Key.ToString())).StartsWith("PERLA_"))
+              nonNull(entry.Key.ToString()).StartsWith("PERLA_"))
             |> Seq.map(fun entry ->
-              (nonNull(entry.Key.ToString())).Replace("PERLA_", ""),
+              nonNull(entry.Key.ToString()).Replace("PERLA_", ""),
               (nonNull entry.Value).ToString() |> nonNull)
             |> Map.ofSeq
             |> AVal.constant
@@ -238,7 +237,6 @@ module FileSystem =
             |> UMX.tag<SystemPath>
 
           try
-            let! token = CancellableTask.getCancellationToken()
             use content = File.OpenRead(UMX.untag path)
             let! descriptions = Json.FromStream<Map<string, string>> content
             return descriptions
@@ -247,8 +245,6 @@ module FileSystem =
         }
 
         member _.ResolveOfflineTemplatesConfig() = cancellableTask {
-          let! token = CancellableTask.getCancellationToken()
-
           let path =
             UMX.untag args.PerlaDirectories.OfflineTemplates
             / "perla.config.json"

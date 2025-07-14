@@ -2,7 +2,6 @@ namespace Perla.PkgManager
 
 open System
 open System.IO
-open System.Text.Json
 open System.Threading
 open Microsoft.Extensions.Logging
 open FsHttp
@@ -359,7 +358,7 @@ module PkgManager =
 
       let filteredScopes =
         map.scopes
-        |> Map.map(fun scope scopeMap ->
+        |> Map.map(fun _ scopeMap ->
           scopeMap |> Map.filter(fun k _ -> isValidTopLevelPackageKey k))
 
       let allScopedImports =

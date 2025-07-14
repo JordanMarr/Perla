@@ -57,7 +57,6 @@ module FsiSession =
     | None -> None
 
 module Scaffolding =
-  open Units
 
   [<Literal>]
   let ScaffoldConfiguration = "TemplateConfiguration"
@@ -92,7 +91,7 @@ module Scaffolding =
 
     abstract Add:
       user: string * repository: string<Repository> * branch: string<Branch> ->
-        CancellableTask<LiteDB.ObjectId>
+        CancellableTask<ObjectId>
 
     abstract FindOne: name: TemplateSearchKind -> PerlaTemplateRepository option
 

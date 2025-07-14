@@ -1,6 +1,5 @@
 namespace Perla.Plugins.Registry
 
-open System
 open System.Collections.Generic
 open System.IO
 open System.Threading
@@ -168,7 +167,7 @@ module PluginManager =
         }
 
         // Plugin execution
-        member this.RunPlugins (pluginOrder) (fileInput) = async {
+        member this.RunPlugins pluginOrder fileInput = async {
           let plugins = this.GetRunnablePlugins(pluginOrder)
 
           let inline folder result next =

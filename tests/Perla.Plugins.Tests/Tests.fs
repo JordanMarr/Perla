@@ -1,6 +1,5 @@
 module Perla.Plugins.Tests.Library
 
-open System
 open System.Threading.Tasks
 
 open Xunit

@@ -3,7 +3,6 @@
 open Spectre.Console.Rendering
 
 open FSharp.UMX
-open Perla.Units
 open FsToolkit.ErrorHandling
 
 [<AutoOpen>]

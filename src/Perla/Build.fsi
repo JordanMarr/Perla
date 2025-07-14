@@ -1,13 +1,11 @@
 namespace Perla.Build
 
-open Microsoft.Extensions.Logging
 
 open AngleSharp.Html.Dom
 
 open FSharp.UMX
 
 
-open Perla.FileSystem
 open Perla.Types
 open Perla.Units
 open Perla.PkgManager
