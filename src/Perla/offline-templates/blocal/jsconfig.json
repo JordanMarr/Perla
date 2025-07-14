@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "moduleResolution": "bundler",
+    "module": "esnext",
+    "isolatedModules": true,
+    "lib": ["DOM", "ES2020"],
+    "erasableSyntaxOnly": true
+  },
+  "exclude": ["node_modules"],
+  "include": ["src/**/*.js"]
+}
