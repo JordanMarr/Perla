@@ -86,7 +86,7 @@ module PluginLoadingTests =
     let service = ExtensibilityService.Create(logger)
 
     let esbuildPlugin = TestHelpers.createSimplePlugin "esbuild-plugin" ".js"
-    let result = service.LoadPlugins([||], esbuildPlugin)
+    let result = service.LoadPlugins([||], [ esbuildPlugin ])
 
     match result with
     | Ok plugins ->
@@ -119,7 +119,7 @@ module PluginRetrievalTests =
     let service = ExtensibilityService.Create(logger)
 
     let esbuildPlugin = TestHelpers.createSimplePlugin "test-plugin" ".js"
-    let _ = service.LoadPlugins([||], esbuildPlugin)
+    let _ = service.LoadPlugins([||], [ esbuildPlugin ])
     let plugins = service.GetAllPlugins()
 
     Assert.Single(plugins) |> ignore
@@ -135,8 +135,8 @@ module PluginRetrievalTests =
     let plugin2 = TestHelpers.createSimplePlugin "plugin2" ".js"
 
     // Load plugins by loading them as esbuild plugins (since we can't easily test script loading)
-    let _ = service.LoadPlugins([||], plugin1)
-    let _ = service.LoadPlugins([||], plugin2)
+    let _ = service.LoadPlugins([||], [ plugin1 ])
+    let _ = service.LoadPlugins([||], [ plugin2 ])
 
     let runnablePlugins = service.GetRunnablePlugins([ "plugin2"; "plugin1" ])
 
@@ -154,7 +154,7 @@ module PluginRetrievalTests =
       let service = ExtensibilityService.Create(logger)
 
       let jsPlugin = TestHelpers.createSimplePlugin "js-plugin" ".js"
-      let _ = service.LoadPlugins([||], jsPlugin)
+      let _ = service.LoadPlugins([||], [ jsPlugin ])
 
       Assert.True(service.HasPluginsForExtension(".js"))
       Assert.False(service.HasPluginsForExtension(".css"))
@@ -185,7 +185,7 @@ module PluginExecutionTests =
     let service = ExtensibilityService.Create(logger)
 
     let jsPlugin = TestHelpers.createSimplePlugin "js-plugin" ".js"
-    let _ = service.LoadPlugins([||], jsPlugin)
+    let _ = service.LoadPlugins([||], [ jsPlugin ])
 
     let inputFile = {
       content = "original content"
@@ -222,7 +222,7 @@ module PluginExecutionTests =
     let service = ExtensibilityService.Create(logger)
 
     let jsPlugin = TestHelpers.createSimplePlugin "js-plugin" ".js"
-    let _ = service.LoadPlugins([||], jsPlugin)
+    let _ = service.LoadPlugins([||], [ jsPlugin ])
 
     let inputFile = {
       content = "should not change"
@@ -255,7 +255,7 @@ module IntegrationTests =
       })
     }
 
-    let result = service.LoadPlugins([||], esbuildPlugin)
+    let result = service.LoadPlugins([||], [ esbuildPlugin ])
 
     match result with
     | Ok plugins ->
@@ -293,8 +293,7 @@ module IntegrationTests =
     let plugin2 = TestHelpers.createSimplePlugin "plugin2" ".txt"
 
     // Load plugins separately (simulating how they might be loaded in practice)
-    let _ = service.LoadPlugins([||], plugin1)
-    let _ = service.LoadPlugins([||], plugin2)
+    let _ = service.LoadPlugins([||], [ plugin1; plugin2 ])
 
     let allPlugins = service.GetAllPlugins()
     Assert.Equal(2, allPlugins.Length)

@@ -39,6 +39,7 @@
     <Compile Include="Build.Tests.fs" />
     <Compile Include="SuaveService.Tests.fs" />
     <Compile Include="Library.Tests.fs" />
+    <Compile Include="ImportMaps.Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 </Project>
