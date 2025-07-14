@@ -890,7 +890,15 @@ module Handlers =
 
     let basePkg, fullImport, version = options.package |> parsePackageName
     let version = version |> Option.orElseWith(fun _ -> options.version)
-    let packages = importMap.ExtractDependencies()
+
+    let packages =
+      if config.useLocalPkgs then
+        config.dependencies
+        |> Set.map(fun ({ package = package; version = version }) ->
+          package, Some(UMX.untag version))
+      else
+        // Otherwise, we start with an empty set of packages
+        importMap.ExtractDependencies()
 
     // Remove any existing entries for this full import or base package
     let packages =
