@@ -259,8 +259,13 @@ module DownloadResponse =
 
   let private downloadResponseSuccessDecoder: Decoder<_> =
     fun element -> decode {
+
       let! filesMap =
-        element |> Required.Property.map("filesMap", downloadPackageDecoder)
+        match
+          element |> Required.Property.map("filesMap", downloadPackageDecoder)
+        with
+        | Ok filesMap -> Ok filesMap
+        | _ -> Required.map downloadPackageDecoder element
 
       return DownloadResponse.DownloadSuccess filesMap
     }
