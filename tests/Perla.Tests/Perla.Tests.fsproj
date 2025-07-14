@@ -38,7 +38,6 @@
     <Compile Include="Extensibility.Tests.fs" />
     <Compile Include="Build.Tests.fs" />
     <Compile Include="SuaveService.Tests.fs" />
-    <Compile Include="Scaffolding.Tests.fs" />
     <Compile Include="Library.Tests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

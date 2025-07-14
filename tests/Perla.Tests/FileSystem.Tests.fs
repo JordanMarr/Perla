@@ -546,7 +546,7 @@ let ``ResolveOfflineTemplatesConfig should return decoded template configuration
             "id": "test-template",
             "name": "Test Template",
             "path": "./test-template",
-            "shortName": "test",
+            "shortname": "test",
             "description": "A test template"
           }
         ],
