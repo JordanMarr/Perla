@@ -115,6 +115,16 @@ type PathsOptions = { operation: PathOperation }
 
 [<RequireQualifiedAccess>]
 module RunNew =
+  let inline tplConverter<'T
+    when 'T: (member Name: string)
+    and 'T: (member Description: string option)
+    and 'T: (member ShortName: string)>
+    (tpl: 'T)
+    =
+    let description =
+      tpl.Description |> Option.defaultValue "No description provided"
+
+    $"{tpl.Name} ({tpl.ShortName}) - {description}"
 
   let findTemplateItemByNameOrId
     (id: string option, name: string option)
@@ -143,63 +153,34 @@ module RunNew =
       let byId =
         id
         |> Option.bind(fun id ->
-          if $"perla.templates.{tpl.id}" = id then Some tpl else None)
+          if $"perla.templates.{tpl.Id}" = id then Some tpl else None)
 
       let byShortName =
         name
         |> Option.bind(fun shortName ->
-          if tpl.shortname = shortName then Some tpl else None)
+          if tpl.ShortName = shortName then Some tpl else None)
 
       byId |> Option.orElse byShortName)
 
-  let private copyFiles
-    (sourcePath: DirectoryInfo)
-    (targetPath: string<SystemPath>)
+
+  let writeFoundTemplate
+    (FsManager fsManager, tpl: TemplateItem, targetPath: string<SystemPath>)
     =
-    let progress = AnsiConsole.Progress()
-    let files = sourcePath.GetFiles("*", SearchOption.AllDirectories)
-
-    let targetDir = DirectoryInfo(UMX.untag targetPath)
-    targetDir.Create()
-
-    progress.Start(fun ctx ->
-      let tsk =
-        ctx.AddTask("Creating project...", true, maxValue = files.Length)
-
-      files
-      |> Array.Parallel.iter(fun file ->
-        // Compute the relative path from the source root
-        let relPath = Path.GetRelativePath(sourcePath.FullName, file.FullName)
-        let destPath = Path.Combine(UMX.untag targetPath, relPath)
-
-        destPath
-        |> Path.GetDirectoryName
-        |> nonNull
-        |> Path.GetFullPath
-        |> Directory.CreateDirectory
-        |> ignore
-
-        File.Copy(file.FullName, destPath, true)
-        tsk.Increment 1)
-
-      tsk.StopTask())
-
-  let writeFoundTemplate(tpl: TemplateItem, targetPath: string<SystemPath>) =
     let tplPath = DirectoryInfo(UMX.untag tpl.FullPath)
-    copyFiles tplPath targetPath
+    fsManager.CopyFiles(tplPath, targetPath)
 
   let writeFoundDecodedTemplate
-    (directories: PerlaDirectories)
+    (FsManager fsManager & Directories directories)
     (
       config: DecodedTemplateConfiguration,
       tpl: DecodedTemplateConfigItem,
       targetPath: string<SystemPath>
     ) =
     let tplPath =
-      Path.Combine(UMX.untag directories.OfflineTemplates, UMX.untag tpl.path)
+      Path.Combine(UMX.untag directories.OfflineTemplates, UMX.untag tpl.Path)
       |> DirectoryInfo
 
-    copyFiles tplPath targetPath
+    fsManager.CopyFiles(tplPath, targetPath)
 
   let logProjectCreationSuccess (logger: ILogger) (targetPath: DirectoryInfo) =
     logger.LogInformation(
@@ -275,12 +256,12 @@ module Handlers =
       | RunNew.FoundById found ->
         logger.LogInformation(
           "Found template '{name}' with short name '{shortName}'",
-          found.name,
-          found.shortname
+          found.Name,
+          found.ShortName
         )
 
         RunNew.writeFoundDecodedTemplate
-          container.Directories
+          container
           (otConfig, found, UMX.tag targetPath.FullName)
 
         RunNew.logProjectCreationSuccess logger targetPath
@@ -290,14 +271,14 @@ module Handlers =
           SelectionPrompt()
             .Title("Select a template to create a new project:")
             .EnableSearch()
-            .UseConverter(fun (tpl: DecodedTemplateConfigItem) ->
-              $"{tpl.name} ({tpl.shortname}) - {tpl.description}")
             .AddChoices(templates)
+            .UseConverter(fun (tpl: DecodedTemplateConfigItem) ->
+              RunNew.tplConverter tpl)
 
         let! selected = AnsiConsole.PromptAsync(prompt, token)
 
         RunNew.writeFoundDecodedTemplate
-          container.Directories
+          container
           (otConfig, selected, UMX.tag targetPath.FullName)
 
         RunNew.logProjectCreationSuccess logger targetPath
@@ -325,7 +306,7 @@ module Handlers =
           found.ShortName
         )
 
-        RunNew.writeFoundTemplate(found, UMX.tag targetPath.FullName)
+        RunNew.writeFoundTemplate(container, found, UMX.tag targetPath.FullName)
         RunNew.logProjectCreationSuccess logger targetPath
         return 0
       | RunNew.PromptUser templates when not(Seq.isEmpty templates) ->
@@ -333,12 +314,18 @@ module Handlers =
           SelectionPrompt()
             .Title("Select a template to create a new project:")
             .EnableSearch()
-            .UseConverter(fun (tpl: TemplateItem) ->
-              $"{tpl.Name} ({tpl.ShortName}) - {tpl.Description}")
             .AddChoices(templates)
+            .UseConverter(fun (tpl: TemplateItem) -> RunNew.tplConverter tpl)
+
 
         let! selected = AnsiConsole.PromptAsync(prompt, token)
-        RunNew.writeFoundTemplate(selected, UMX.tag targetPath.FullName)
+
+        RunNew.writeFoundTemplate(
+          container,
+          selected,
+          UMX.tag targetPath.FullName
+        )
+
         RunNew.logProjectCreationSuccess logger targetPath
         return 0
       | RunNew.PromptUser _ ->

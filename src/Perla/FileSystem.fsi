@@ -16,6 +16,9 @@ open Perla.RequestHandler
 [<Interface>]
 type PerlaFsManager =
 
+  abstract CopyFiles:
+    sourcePath: System.IO.DirectoryInfo * targetPath: string<SystemPath> -> unit
+
   abstract PerlaConfiguration: PerlaConfig aval
 
   abstract ResolveIndexPath: string<SystemPath> aval

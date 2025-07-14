@@ -10,11 +10,11 @@ open JDeck
 open FSharp.UMX
 
 type DecodedTemplateConfigItem = {
-  id: string
-  name: string
-  path: string<SystemPath>
-  shortname: string
-  description: string option
+  Id: string
+  Name: string
+  Path: string<SystemPath>
+  ShortName: string
+  Description: string option
 }
 
 type DecodedTemplateConfiguration = {

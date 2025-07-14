@@ -42,18 +42,18 @@ module TestHelpers =
     group = "web"
     templates = [
       {
-        id = "basic"
-        name = "Basic Template"
-        shortname = "basic"
-        description = Some "Basic web template"
-        path = UMX.tag<SystemPath> "basic"
+        Id = "basic"
+        Name = "Basic Template"
+        ShortName = "basic"
+        Description = Some "Basic web template"
+        Path = UMX.tag<SystemPath> "basic"
       }
       {
-        id = "advanced"
-        name = "Advanced Template"
-        shortname = "adv"
-        description = Some "Advanced web template"
-        path = UMX.tag<SystemPath> "advanced"
+        Id = "advanced"
+        Name = "Advanced Template"
+        ShortName = "adv"
+        Description = Some "Advanced web template"
+        Path = UMX.tag<SystemPath> "advanced"
       }
     ]
   }
@@ -158,10 +158,10 @@ let ``TemplateConfigItem from sample should have correct structure``() =
   Assert.Equal("web", config.group)
   Assert.Equal(2, config.templates |> Seq.length)
 
-  let basicTemplate = config.templates |> Seq.find(fun t -> t.id = "basic")
-  Assert.Equal("Basic Template", basicTemplate.name)
-  Assert.Equal("basic", basicTemplate.shortname)
-  Assert.Equal(Some "Basic web template", basicTemplate.description)
+  let basicTemplate = config.templates |> Seq.find(fun t -> t.Id = "basic")
+  Assert.Equal("Basic Template", basicTemplate.Name)
+  Assert.Equal("basic", basicTemplate.ShortName)
+  Assert.Equal(Some "Basic web template", basicTemplate.Description)
 
 [<Fact>]
 let ``DecodedTemplateConfigItem should have proper type structure``() =

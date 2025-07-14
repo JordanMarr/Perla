@@ -26,11 +26,11 @@ type PerlaConfigSection =
   | Dependencies of dependencies: PkgDependency Set option
 
 type DecodedTemplateConfigItem = {
-  id: string
-  name: string
-  path: string<SystemPath>
-  shortname: string
-  description: string option
+  Id: string
+  Name: string
+  Path: string<SystemPath>
+  ShortName: string
+  Description: string option
 }
 
 type DecodedTemplateConfiguration = {
@@ -299,6 +299,27 @@ module internal Decoders =
           |> Error
     }
 
+  let DecodedTemplateConfigItemDecoder: Decoder<DecodedTemplateConfigItem> =
+    fun element -> decode {
+      let! id = Required.Property.get ("id", Required.string) element
+      let! name = Required.Property.get ("name", Required.string) element
+      let! path = Required.Property.get ("path", Required.string) element
+
+      let! shortname =
+        Required.Property.get ("shortname", Required.string) element
+
+      let! description =
+        Optional.Property.get ("description", Required.string) element
+
+      return {
+        Id = id
+        Name = name
+        Path = UMX.tag path
+        ShortName = shortname
+        Description = description
+      }
+    }
+
 [<RequireQualifiedAccess>]
 module internal Encoders =
 
@@ -328,6 +349,7 @@ let DefaultJsonOptions() =
   )
   |> Codec.useDecoder TestEventDecoder
   |> Codec.useDecoder PkgManager.DownloadResponse.Decoder
+  |> Codec.useDecoder DecodedTemplateConfigItemDecoder
   |> Codec.useCodec(Encoders.Browser, BrowserDecoder)
   |> Codec.useCodec(Encoders.BrowserMode, BrowserModeDecoder)
   |> Codec.useCodec(Encoders.DownloadProviderEncoder, DownloadProviderDecoder)

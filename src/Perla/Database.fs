@@ -196,14 +196,14 @@ module Database =
     |> Seq.map(fun templateItem ->
       TemplateItem(
         _id = ObjectId.NewObjectId(),
-        Id = templateItem.id,
+        Id = templateItem.Id,
         Parent = repositoryId,
-        Name = templateItem.name,
-        Group = $"{config.group}.{templateItem.id}",
-        ShortName = templateItem.shortname,
-        Description = templateItem.description,
+        Name = templateItem.Name,
+        Group = $"{config.group}.{templateItem.Id}",
+        ShortName = templateItem.ShortName,
+        Description = templateItem.Description,
         FullPath =
-          System.IO.Path.Combine(basePath, UMX.untag templateItem.path)
+          System.IO.Path.Combine(basePath, UMX.untag templateItem.Path)
       ))
 
   let buildTemplateConfigurationItems(templateItems: TemplateItem seq) =

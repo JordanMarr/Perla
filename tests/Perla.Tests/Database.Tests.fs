@@ -83,18 +83,18 @@ module TestHelpers =
     group = "web"
     templates = [|
       {
-        id = "basic"
-        name = "Basic Template"
-        path = UMX.tag<SystemPath> "templates/basic"
-        shortname = "basic"
-        description = Some "A basic web template"
+        Id = "basic"
+        Name = "Basic Template"
+        Path = UMX.tag<SystemPath> "templates/basic"
+        ShortName = "basic"
+        Description = Some "A basic web template"
       }
       {
-        id = "advanced"
-        name = "Advanced Template"
-        path = UMX.tag<SystemPath> "templates/advanced"
-        shortname = "advanced"
-        description = Some "An advanced web template"
+        Id = "advanced"
+        Name = "Advanced Template"
+        Path = UMX.tag<SystemPath> "templates/advanced"
+        ShortName = "advanced"
+        Description = Some "An advanced web template"
       }
     |]
     author = Some "Test Author"

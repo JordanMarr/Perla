@@ -34,6 +34,9 @@ type PerlaFileChange =
 [<Interface>]
 type PerlaFsManager =
 
+  abstract CopyFiles:
+    sourcePath: DirectoryInfo * targetPath: string<SystemPath> -> unit
+
   abstract PerlaConfiguration: Types.PerlaConfig aval
 
   abstract ResolveIndexPath: string<SystemPath> aval
@@ -101,6 +104,43 @@ module FileSystem =
 
   let GetManager(args: PerlaFsManagerArgs) : PerlaFsManager =
     { new PerlaFsManager with
+        member _.CopyFiles(sourcePath, targetPath) =
+          let progress = Spectre.Console.AnsiConsole.Progress()
+          let files = sourcePath.GetFiles("*", SearchOption.AllDirectories)
+
+          let targetDir = DirectoryInfo(FSharp.UMX.UMX.untag targetPath)
+          targetDir.Create()
+
+          progress.Start(fun ctx ->
+            let tsk =
+              ctx.AddTask("Creating project...", true, maxValue = files.Length)
+
+            files
+            |> Array.Parallel.iter(fun file ->
+              // Compute the relative path from the source root
+              let relPath =
+                System.IO.Path.GetRelativePath(
+                  sourcePath.FullName,
+                  file.FullName
+                )
+
+              let destPath =
+                System.IO.Path.Combine(
+                  FSharp.UMX.UMX.untag targetPath,
+                  relPath
+                )
+
+              destPath
+              |> System.IO.Path.GetDirectoryName
+              |> nonNull
+              |> System.IO.Path.GetFullPath
+              |> Directory.CreateDirectory
+              |> ignore
+
+              File.Copy(file.FullName, destPath, true)
+              tsk.Increment 1)
+
+            tsk.StopTask())
 
         member _.PerlaConfiguration = adaptive {
           let path = UMX.untag args.PerlaDirectories.PerlaConfigPath
