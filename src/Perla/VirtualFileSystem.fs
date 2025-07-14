@@ -190,6 +190,7 @@ module VirtualFs =
     (logger: ILogger)
     (extensibility: ExtensibilityService)
     (content: string)
+    (fileLocation: string)
     (extension: string)
     =
     async {
@@ -197,6 +198,7 @@ module VirtualFs =
       let fileTransform = {
         content = content
         extension = extension
+        fileLocation = fileLocation
       }
 
       // Check if there are plugins available for this extension
@@ -302,7 +304,8 @@ module VirtualFs =
           }
 
 
-          let! transform = applyPlugins logger extensibility content extension
+          let! transform =
+            applyPlugins logger extensibility content sourcePath extension
 
           let fileContent = {
             filename = Path.GetFileName(sourcePath) |> nonNull

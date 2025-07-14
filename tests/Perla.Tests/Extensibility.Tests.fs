@@ -167,6 +167,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "unchanged"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [] inputFile
@@ -186,6 +187,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "original content"
       extension = ".js"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [ "js-plugin" ] inputFile
@@ -202,6 +204,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "test content"
       extension = ".js"
+      fileLocation = "/some/path/to/file"
     }
 
     // Try to run a plugin that doesn't exist
@@ -223,6 +226,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "should not change"
       extension = ".css" // Different extension
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [ "js-plugin" ] inputFile
@@ -266,6 +270,7 @@ module IntegrationTests =
       let inputFile = {
         content = "const x: number = 42;"
         extension = ".ts"
+        fileLocation = "/some/path/to/file"
       }
 
       let! transformedFile = service.RunPlugins [ "esbuild" ] inputFile
@@ -297,6 +302,7 @@ module IntegrationTests =
     let inputFile = {
       content = "original"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [ "plugin1"; "plugin2" ] inputFile

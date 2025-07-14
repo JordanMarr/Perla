@@ -490,6 +490,7 @@ module LiveReload =
       createHmrEventData event {
         content = file.content
         extension = ".css"
+        fileLocation = UMX.untag file.source
       }
 
     let id = string(DateTimeOffset.Now.ToUnixTimeSeconds())
@@ -886,9 +887,7 @@ module SuaveServer =
                     ""
 
                 match fields.TryFind key with
-                | Some(:? IFormattable as f) when
-                  not(String.IsNullOrEmpty(fmt))
-                  ->
+                | Some(:? IFormattable as f) when not(String.IsNullOrEmpty(fmt)) ->
                   f.ToString(
                     fmt,
                     System.Globalization.CultureInfo.InvariantCulture

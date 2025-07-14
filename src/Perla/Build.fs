@@ -74,7 +74,7 @@ module Build =
           return UMX.tag<ServerUrl> href.Value
       })
 
-    let htmlBundles =
+    let jsBundles =
       document.QuerySelectorAll("[data-entry-point][type=module]")
       |> Seq.choose(fun el -> option {
         let! dataEntryPoint = el.Attributes["data-entry-point"]
@@ -98,7 +98,7 @@ module Build =
           return UMX.tag<ServerUrl> src.Value
       })
 
-    cssBundles, htmlBundles, standaloneBundles
+    cssBundles, jsBundles, standaloneBundles
 
   let Externals(config: PerlaConfig) = seq {
 

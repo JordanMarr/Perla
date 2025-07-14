@@ -363,6 +363,7 @@ let Plugin = {{
     let inputFile = {
       extension = ".test"
       content = "original"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = manager.RunPlugins [ "plugin1"; "plugin2" ] inputFile
@@ -554,6 +555,7 @@ let Plugin = {{
     let inputFile = {
       extension = ".test"
       content = "input"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = manager.RunPlugins [ "plugin1"; "plugin2" ] inputFile
@@ -594,6 +596,7 @@ module PluginBuilderTests =
       let inputFile = {
         content = "original"
         extension = ".json"
+        fileLocation = "/some/path/to/file"
       }
 
       let! result = transform inputFile
@@ -633,6 +636,7 @@ module PluginBuilderTests =
     let inputFile = {
       content = "Hello World"
       extension = ".md"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = manager.RunPlugins [ "async-transform" ] inputFile
@@ -662,6 +666,7 @@ module PluginBuilderTests =
     let inputFile = {
       content = "body { color: red; }"
       extension = ".css"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = manager.RunPlugins [ "valuetask-transform" ] inputFile
@@ -693,6 +698,7 @@ module PluginBuilderTests =
     let inputFile = {
       content = "console.log('hello');"
       extension = ".js"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = manager.RunPlugins [ "async-fs-transform" ] inputFile
@@ -717,7 +723,12 @@ module PluginBuilderTests =
 
     match testPlugin.transform with
     | ValueSome transform ->
-      let inputFile = { content = "test"; extension = ".any" }
+      let inputFile = {
+        content = "test"
+        extension = ".any"
+        fileLocation = "/some/path/to/file"
+      }
+
       let! result = transform inputFile
       Assert.Equal("PROCESSED: test", result.content)
     | ValueNone -> Assert.Fail("Expected transform to be Some")
@@ -787,6 +798,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "original"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result =
@@ -837,6 +849,7 @@ module PluginExecutionTests =
     let jsFile = {
       content = "console.log('test');"
       extension = ".js"
+      fileLocation = "/some/path/to/file"
     }
 
     let! jsResult =
@@ -850,6 +863,7 @@ module PluginExecutionTests =
     let cssFile = {
       content = "body { color: red; }"
       extension = ".css"
+      fileLocation = "/some/path/to/file"
     }
 
     let! cssResult =
@@ -872,6 +886,7 @@ module PluginExecutionTests =
       with_transform(fun file -> {
         content = $"<h1>{file.content}</h1>"
         extension = ".html"
+        fileLocation = "/some/path/to/file"
       })
     }
 
@@ -890,6 +905,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "Hello World"
       extension = ".md"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result =
@@ -908,6 +924,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "unchanged"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = manager.RunPlugins [] inputFile
@@ -933,7 +950,11 @@ module PluginExecutionTests =
 
     manager.AddPlugin(realPlugin) |> ignore
 
-    let inputFile = { content = "test"; extension = ".txt" }
+    let inputFile = {
+      content = "test"
+      extension = ".txt"
+      fileLocation = "/some/path/to/file"
+    }
     // Include a non-existent plugin in the list
     let! result =
       manager.RunPlugins
@@ -990,6 +1011,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "original"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result =

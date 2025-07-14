@@ -29,11 +29,17 @@ type EsbuildServiceArgs = {
 type EsbuildService =
 
   abstract ProcessJS:
-    entrypoint: string * outdir: string * config: EsbuildConfig ->
+    entrypoint: string<ServerUrl> *
+    sourcesPath: string<SystemPath> *
+    outdir: string<SystemPath> *
+    config: EsbuildConfig ->
       CancellableTask<unit>
 
   abstract ProcessCss:
-    entrypoint: string * outdir: string * config: EsbuildConfig ->
+    entrypoint: string<ServerUrl> *
+    sourcesPath: string<SystemPath> *
+    outdir: string<SystemPath> *
+    config: EsbuildConfig ->
       CancellableTask<unit>
 
   abstract GetPlugin: config: EsbuildConfig -> PluginInfo
@@ -111,6 +117,7 @@ module Esbuild =
               return {
                 content = result
                 extension = if args.extension = ".css" then ".css" else ".js"
+                fileLocation = args.fileLocation
               }
             }
 
@@ -120,7 +127,7 @@ module Esbuild =
           }
 
         member this.ProcessCss
-          (entrypoint, outdir, config: EsbuildConfig)
+          (entrypoint, sourcesPath, outdir, config: EsbuildConfig)
           : CancellableTask<unit> =
           cancellableTask {
             let esbuildPath = serviceArgs.PerlaFsManager.ResolveEsbuildPath()
@@ -128,9 +135,9 @@ module Esbuild =
             do!
               serviceArgs.PlatformOps.RunEsbuildCss(
                 esbuildPath,
-                serviceArgs.Cwd,
-                entrypoint,
-                outdir,
+                sourcesPath,
+                UMX.untag entrypoint,
+                UMX.untag outdir,
                 config.minify,
                 config.fileLoaders
               )
@@ -139,7 +146,7 @@ module Esbuild =
           }
 
         member this.ProcessJS
-          (entrypoint, outdir, config: EsbuildConfig)
+          (entrypoint, sourcesPath, outdir, config: EsbuildConfig)
           : CancellableTask<unit> =
           cancellableTask {
             let esbuildPath = serviceArgs.PerlaFsManager.ResolveEsbuildPath()
@@ -147,9 +154,9 @@ module Esbuild =
             do!
               serviceArgs.PlatformOps.RunEsbuildJs(
                 esbuildPath,
-                serviceArgs.Cwd,
-                entrypoint,
-                outdir,
+                sourcesPath,
+                UMX.untag entrypoint,
+                UMX.untag outdir,
                 config
               )
 

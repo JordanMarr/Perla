@@ -256,6 +256,7 @@ module SuaveServiceTests =
     let transform: Perla.Plugins.FileTransform = {
       content = "body{}"
       extension = ".css"
+      fileLocation = "/some/path/to/file"
     }
 
     let data = createHmrEventData event transform
