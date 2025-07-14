@@ -7,6 +7,7 @@ open Microsoft.Extensions.Logging
 
 open AngleSharp
 open AngleSharp.Html.Parser
+open Perla.Esbuild
 open Spectre.Console
 
 open FSharp.Control
@@ -371,7 +372,7 @@ module Handlers =
 
       match options.operation with
       | RunTemplateOperation.List listFormat ->
-        // Simply list the templates using the service and return
+        // List the templates using the service and return
         let templates = templateService.ListTemplateItems()
 
         match listFormat with
@@ -458,6 +459,7 @@ module Handlers =
 
     let config = container.Configuration.PerlaConfig |> AVal.force
 
+    // fable runs first, it will produce the source code for our build if available
     match config.fable with
     | None ->
       container.Logger.LogWarning(
@@ -470,7 +472,13 @@ module Handlers =
 
       do! container.FableService.Run config
 
+    // cleanup any leftovers of a previous build
     let outDir = DirectoryInfo(UMX.untag config.build.outDir)
+
+    let tempDir =
+      Path.GetTempPath() + Path.GetRandomFileName() |> UMX.tag<SystemPath>
+
+    Directory.CreateDirectory(UMX.untag tempDir) |> ignore
 
     try
       outDir.Delete(true)
@@ -481,22 +489,26 @@ module Handlers =
         ex.Message
       )
 
+    // load any local plugins
     let plugins = container.FsManager.ResolvePluginPaths()
 
-    let defaultPlugins = seq {
-      if not(Map.isEmpty config.paths) then
-        ImportMaps.createPathsReplacerPlugin(
-          container.Configuration.PerlaConfig |> AVal.map _.paths
-        )
+    let isEsbuildPluginPresent =
+      config.plugins |> List.contains Constants.PerlaEsbuildPluginName
 
-      if
-        config.plugins
-        |> List.exists(fun p ->
-          p.Equals(
-            Constants.PerlaEsbuildPluginName,
-            StringComparison.InvariantCultureIgnoreCase
-          ))
-      then
+    let isPathsReplacerPresent =
+      config.plugins |> List.contains Constants.PerlaPathsReplacerPluginName
+
+    // default plugin behaviors
+    // if the plugins are not present in the config don't apply these plugins
+    let defaultPlugins = seq {
+      // unless paths contain custom resolutions
+      if isPathsReplacerPresent || not(Map.isEmpty config.paths) then
+        ImportMaps.createPathsReplacerPlugin
+          (container.Configuration.PerlaConfig |> AVal.map _.paths)
+          tempDir
+
+
+      if isEsbuildPluginPresent then
         container.EsbuildService.GetPlugin config.esbuild
     }
 
@@ -506,13 +518,17 @@ module Handlers =
     |> Result.ignore
     |> Result.ignoreError
 
+    // once plugins are loaded and fable has run we can load the virtual file system
+    // if esbuild is available it will run after the paths replacer (if available too)
+    // this will give us sources already compiled in the vfs
     do!
       container.Logger.Spinner(
         "Mounting Virtual File System",
         container.VirtualFileSystem.Load config.mountDirectories
       )
 
-    let! tempDir = container.VirtualFileSystem.ToDisk()
+    // copy the vfs to a dis location
+    let! tempDir = container.VirtualFileSystem.ToDisk tempDir
 
 
     container.Logger.LogInformation(
@@ -532,49 +548,86 @@ module Handlers =
     let document =
       (browserCtx.GetService<IHtmlParser>() |> nonNull).ParseDocument index
 
-
-    // at this point all of the files in the tempDir should have gone through esbuild if it was enabled
-    // but as individual files, not as a bundle
-    let cssPaths, jsPaths, standalonePaths = Build.EntryPoints document
-
-    let jsPaths = seq {
-      yield! jsPaths
-      yield! standalonePaths
-    }
-
     let map =
       container.FsManager.ResolveImportMap
+      // resolve the import map with the runtime config
       |> ImportMaps.withPathsA container.Configuration.PerlaConfig
+      // since we're minifying the path replacer should have cleaned up
+      // the paths that at runtime were pointing to local files
+      |> AVal.map(ImportMaps.cleanupLocalPaths config.paths)
       |> AVal.force
+
+    let externals =
+      // everything that is not a local path (cleaned up above)
+      // will have to be marked as external so esbuild doesn't die half way
+      ImportMaps.getExternalsFromPaths(
+        container.Configuration.PerlaConfig |> AVal.map _.paths
+      )
+
+    // Get the entry points for each bundle in the index file
+    let cssPaths, jsBundleEntrypoints, jsStandalonePaths =
+      Build.EntryPoints document
+
+    // Once we have all the physical locations in place run esbuild on js and css
+
+    if isEsbuildPluginPresent then
+
+      for entrypoint in jsBundleEntrypoints do
+        do!
+          container.EsbuildService.ProcessJS(
+            entrypoint,
+            tempDir,
+            config.build.outDir,
+            {
+              config.esbuild with
+                  externals = [
+                    for external in externals -> UMX.untag external
+                    yield! Build.Externals config
+                  ]
+            }
+          )
+
+      for entrypoint in cssPaths do
+        do!
+          container.EsbuildService.ProcessCss(
+            entrypoint,
+            tempDir,
+            config.build.outDir,
+            config.esbuild
+          )
+
+      // we've minified our sources and emitted them to the out dir
+      // anything left to copy should be in our cwd
+      container.FsManager.CopyGlobs config.build
+    else
+      // esbuild didn't run for our sources so we will just move them to the outdir
+      // Move the temporary directory to the output directory as that's the source of truth for our build
+      try
+        Directory.Move(UMX.untag tempDir, outDir.FullName)
+      with ex ->
+        container.Logger.LogWarning(
+          "Failed to move temporary directory {tempDir} to output directory {outDir}: {error}",
+          tempDir,
+          config.build.outDir,
+          ex.Message
+        )
+
+    // all of the js paths need to be part of the index file
+    let jsPaths = seq {
+      yield! jsStandalonePaths
+      yield! jsBundleEntrypoints
+    }
 
     let indexContent = Build.Index(document, map, jsPaths, cssPaths)
 
     do!
       File.WriteAllTextAsync(
-        Path.Combine(UMX.untag tempDir, "index.html"),
+        Path.Combine(UMX.untag config.build.outDir, "index.html"),
         indexContent,
         token
       )
 
-    // Move the temporary directory to the output directory as that's the source of truth for our build
-    try
-      Directory.Move(UMX.untag tempDir, outDir.FullName)
-    with ex ->
-      container.Logger.LogWarning(
-        "Failed to move temporary directory {tempDir} to output directory {outDir}: {error}",
-        tempDir,
-        config.build.outDir,
-        ex.Message
-      )
-
-    // At this point the outdir should be available, we can safely copy things out.
-    container.FsManager.CopyGlobs config.build
-
-    // TODO: evauate the bundle and minification usage here
-    // at this point our original index file is still pointing to the entrypoints
-    // so we could run esbuild to bundle and minify the sources
-    // however, this might cause issues with the "paths" and other custom resolutions
-
+    // at this point everything should be ready at the outdir and be available for preview
     if options.enablePreview then
       container.Logger.LogInformation "Starting a preview server for the build"
 
@@ -655,9 +708,6 @@ module Handlers =
       let plugins = container.FsManager.ResolvePluginPaths()
 
       let defaultPlugins = seq {
-        if not(Map.isEmpty config.paths) then
-          ImportMaps.createPathsReplacerPlugin(configA |> AVal.map _.paths)
-
         if
           config.plugins
           |> List.exists(fun p ->
