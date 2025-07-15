@@ -283,6 +283,9 @@ type HasConfiguration =
 type HasPkgManager =
   abstract member PkgManager: PkgManager
 
+type HasBuildService =
+  abstract member BuildService: Perla.Build.BuildService
+
 [<Interface>]
 type AppContainer =
   inherit HasLogger
@@ -298,6 +301,7 @@ type AppContainer =
   inherit HasConfiguration
   inherit HasPkgManager
   inherit HasRequestHandler
+  inherit HasBuildService
 
 type AppContainerArgs = {
   Logger: ILogger
@@ -398,6 +402,16 @@ module AppContainer =
         member _.Configuration = configurationManager
         member _.PkgManager = pkgManager
         member _.RequestHandler = requestHandler
+
+        member _.BuildService =
+          Perla.Build.BuildService.Create {
+            Logger = logger
+            FsManager = fsManager
+            EsbuildService = esbuildService
+            ExtensibilityService = extensibilityService
+            VirtualFileSystem = virtualFileSystem
+            FableService = fableService
+          }
     }
 
 [<AutoOpen>]
