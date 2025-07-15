@@ -88,7 +88,7 @@ type FakePlatformOps
     member _.StreamFable(_, _, _, _) = AsyncSeq.empty |> AsyncSeq.toAsyncEnum
     member _.IsFableAvailable() = cancellableTask { return fableAvailable }
 
-    member _.RunEsbuildTransform(_, _, _, _, _, _, _) = cancellableTask {
+    member _.RunEsbuildTransform(_, _, _, _, _, _, _, _) = cancellableTask {
       return ""
     }
 

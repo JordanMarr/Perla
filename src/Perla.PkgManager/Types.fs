@@ -128,9 +128,23 @@ type GeneratorResponse = {
   map: ImportMap
 }
 
+type GeneratorResponseKind =
+  | Success of GeneratorResponse
+  | ResponseError of DownloadResponseError
 
 module ImportMap =
   open JDeck
+
+  module Result =
+    let inline forceOption value =
+      value
+      |> Result.map(fun v ->
+        match v with
+        | Some v ->
+          match withNull v with
+          | null -> None
+          | v -> Some v
+        | None -> None)
 
   let Empty = {
     imports = Map.empty
@@ -141,13 +155,19 @@ module ImportMap =
   let Decoder: Decoder<ImportMap> =
     fun element -> decode {
       let! imports =
-        element |> Optional.Property.map("imports", Required.string)
+        element
+        |> Optional.Property.map("imports", Required.string)
+        |> Result.forceOption
 
       let! scopes =
-        element |> Optional.Property.map("scopes", Required.map Required.string)
+        element
+        |> Optional.Property.map("scopes", Required.map Required.string)
+        |> Result.forceOption
 
       let! integrity =
-        element |> Optional.Property.map("integrity", Required.string)
+        element
+        |> Optional.Property.map("integrity", Required.string)
+        |> Result.forceOption
 
       return {
         imports = defaultArg imports Map.empty
@@ -259,7 +279,7 @@ module DownloadResponse =
   let private downloadResponseSuccessDecoder: Decoder<_> =
     fun element -> decode {
 
-      let! filesMap =
+      let! (filesMap: Map<string, DownloadPackage>) =
         match
           element |> Required.Property.map("filesMap", downloadPackageDecoder)
         with
@@ -274,3 +294,42 @@ module DownloadResponse =
       downloadResponseErrorDecoder
       downloadResponseSuccessDecoder
     ]
+
+module GeneratorResponse =
+  open JDeck
+
+  let private generatorSuccessDecoder =
+    fun element -> decode {
+
+      let! staticDeps =
+        element
+        |> Optional.Property.array("staticDeps", Required.string)
+        |> Result.map(Option.defaultValue Array.empty)
+
+      let! dynamicDeps =
+        element
+        |> Optional.Property.array("dynamicDeps", Required.string)
+        |> Result.map(Option.defaultValue Array.empty)
+
+      let! map =
+        element
+        |> Optional.Property.get("map", ImportMap.Decoder)
+        |> Result.map(Option.defaultValue ImportMap.Empty)
+
+
+      return
+        Success {
+          staticDeps = staticDeps
+          dynamicDeps = dynamicDeps
+          map = map
+        }
+    }
+
+  let private downloadResponseErrorDecoder: Decoder<_> =
+    fun element -> decode {
+      let! error = element |> Required.Property.get("error", Required.string)
+      return ResponseError { error = error }
+    }
+
+  let Decoder: Decoder<GeneratorResponseKind> =
+    Decode.oneOf [ downloadResponseErrorDecoder; generatorSuccessDecoder ]

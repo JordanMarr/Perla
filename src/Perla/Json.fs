@@ -347,6 +347,7 @@ let DefaultJsonOptions() =
   )
   |> Codec.useDecoder TestEventDecoder
   |> Codec.useDecoder PkgManager.DownloadResponse.Decoder
+  |> Codec.useDecoder PkgManager.GeneratorResponse.Decoder
   |> Codec.useDecoder DecodedTemplateConfigItemDecoder
   |> Codec.useCodec(Encoders.Browser, BrowserDecoder)
   |> Codec.useCodec(Encoders.BrowserMode, BrowserModeDecoder)

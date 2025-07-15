@@ -1001,6 +1001,12 @@ module Handlers =
         )
       )
 
+    match installResponse with
+    | GeneratorResponseKind.ResponseError err ->
+      logger.LogError("Unable to install packages: {error}", err.error)
+      return 1
+    | GeneratorResponseKind.Success installResponse ->
+
     let packageUpdates =
       // extract the dependencies before we save the offline map
       installResponse.map.ExtractDependencies()
@@ -1083,6 +1089,12 @@ module Handlers =
             token
           )
         )
+
+      match uninstallResponse with
+      | GeneratorResponseKind.ResponseError err ->
+        logger.LogError("Unable to install packages: {error}", err.error)
+        return 1
+      | GeneratorResponseKind.Success uninstallResponse ->
 
       let packageUpdates =
         // extract the dependencies before we save the offline map
@@ -1168,10 +1180,20 @@ module Handlers =
       do! container.FsManager.SavePerlaConfig(changes)
       return 0
     else
-
       let packages =
-        dependencies
-        |> Set.map(fun dep -> $"{dep.package}@{UMX.untag dep.version}")
+        config
+        |> AVal.map _.dependencies
+        |> AVal.force
+        |> Set.map(fun ({ package = package; version = version }) ->
+          let basePkg, full, _ = parsePackageName package
+
+          match Some version with
+          | Some v when full <> basePkg ->
+            $"{basePkg}@{v}/{full.Substring(basePkg.Length + 1)}"
+          | Some v -> $"{basePkg}@{v}"
+          | None -> full)
+
+      logger.LogDebug("Found Dependencies: {dependencies}", packages)
 
       let provider =
         match options.source with
@@ -1194,9 +1216,17 @@ module Handlers =
           )
         )
 
+      logger.LogDebug("Response: {response}", map)
+
+      match map with
+      | GeneratorResponseKind.ResponseError err ->
+        logger.LogError("Unable to install packages: {error}", err.error)
+        return 1
+      | GeneratorResponseKind.Success updateResponse ->
+
       let packageUpdates =
         // extract the dependencies before we save the offline map
-        map.map.ExtractDependencies()
+        updateResponse.map.ExtractDependencies()
         |> Set.map(fun (name, version) ->
           let dep: PkgDependency = {
             package = name
@@ -1217,14 +1247,14 @@ module Handlers =
             logger.Spinner(
               "Downloading Sources...",
               pkgManager.GoOffline(
-                map.map,
+                updateResponse.map,
                 [ DownloadOption.Provider provider ],
                 token
               )
             )
         else
           logger.LogInformation("Import map generated successfully.")
-          return map.map
+          return updateResponse.map
       }
 
       let configUpdates = [

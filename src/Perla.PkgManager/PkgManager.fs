@@ -22,21 +22,21 @@ type PkgManager =
     packages: string seq *
     ?options: GeneratorOption seq *
     ?cancellationToken: CancellationToken ->
-      Task<GeneratorResponse>
+      Task<GeneratorResponseKind>
 
   abstract member Update:
     map: ImportMap *
     packages: string seq *
     ?options: GeneratorOption seq *
     ?cancellationToken: CancellationToken ->
-      Task<GeneratorResponse>
+      Task<GeneratorResponseKind>
 
   abstract member Uninstall:
     map: ImportMap *
     packages: string seq *
     ?options: GeneratorOption seq *
     ?cancellationToken: CancellationToken ->
-      Task<GeneratorResponse>
+      Task<GeneratorResponseKind>
 
   abstract member GoOffline:
     map: ImportMap *
@@ -534,6 +534,4 @@ module PkgManager =
           None)
 
     member this.FindDependencies(packages: string seq) =
-      packages
-      |> Seq.choose this.FindDependency
-      |> Set
+      packages |> Seq.choose this.FindDependency |> Set
