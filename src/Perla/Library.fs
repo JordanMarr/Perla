@@ -4,6 +4,7 @@ open Spectre.Console.Rendering
 
 open FSharp.UMX
 open FsToolkit.ErrorHandling
+open Perla // Ensure extensions are available
 
 [<AutoOpen>]
 module Lib =
@@ -11,37 +12,6 @@ module Lib =
   open Perla.Types
   open Spectre.Console
   open System.Text.RegularExpressions
-
-  [<return: Struct>]
-  let internal (|ParseRegex|_|) (regex: Regex) str =
-    let m = regex.Match(str)
-
-    if m.Success then
-      ValueSome(List.tail [ for x in m.Groups -> x.Value ])
-    else
-      ValueNone
-
-  let parseFullRepositoryName(value: string option) = voption {
-    let! name = value
-    let regex = Regex(@"^([-_\w\d]+)\/([-_\w\d]+):?([\w\d-_]+)?$")
-
-    return!
-      match name with
-      | ParseRegex regex [ username; repository; branch ] ->
-        ValueSome(username, repository, branch)
-      | ParseRegex regex [ username; repository ] ->
-        ValueSome(username, repository, "main")
-      | _ -> ValueNone
-  }
-
-  let getTemplateAndChild(templateName: string) =
-    match
-      templateName.Split("/") |> Array.filter(String.IsNullOrWhiteSpace >> not)
-    with
-    | [| user; template; child |] -> Some user, template, Some child
-    | [| template; child |] -> None, template, Some child
-    | [| template |] -> None, template, None
-    | _ -> None, templateName, None
 
   let dependencyTable(deps: PkgDependency Set, title: string) =
     let table = Table().AddColumns([| "Name"; "Version" |])
@@ -55,81 +25,6 @@ module Lib =
       table.AddRow(dependency.package, UMX.untag dependency.version) |> ignore
 
     table
-
-  let (|ScopedPackage|Package|)(package: string) =
-    if package.StartsWith("@") then
-      ScopedPackage(package.Substring(1))
-    else
-      Package package
-
-  let parsePackageName(name: string) : string * string * string option =
-    // Handles cases like:
-    // solid-js@1.9.7
-    // solid-js/web
-    // solid-js/web@1.9.7
-    // @scope/pkg@1.2.3
-    // @scope/pkg/deep@1.2.3
-    let basePkg, fullImport, version =
-      let namePart, version =
-        let atIdx = name.LastIndexOf("@")
-
-        if atIdx > 0 && not(name.StartsWith("@")) then
-          let before = name.Substring(0, atIdx)
-          let after = name.Substring(atIdx + 1)
-          before, Some after
-        else
-          name, None
-
-      let parts = namePart.Split('/')
-
-      if parts.Length > 1 then
-        // deep import
-        let basePkg =
-          if namePart.StartsWith("@") then
-            // scoped: @scope/pkg/deep
-            if parts.Length >= 2 then
-              $"{parts[0]}/{parts[1]}"
-            else
-              namePart
-          else
-            parts[0]
-
-        basePkg, namePart, version
-      else
-        namePart, namePart, version
-
-    basePkg, fullImport, version
-
-  let (|Log|Debug|Info|Err|Warning|Clear|) level =
-    match level with
-    | "assert"
-    | "debug" -> Debug
-    | "info" -> Info
-    | "error" -> Err
-    | "warning" -> Warning
-    | "clear" -> Clear
-    | "log"
-    | "dir"
-    | "dirxml"
-    | "table"
-    | "trace"
-    | "startGroup"
-    | "startGroupCollapsed"
-    | "endGroup"
-    | "profile"
-    | "profileEnd"
-    | "count"
-    | "timeEnd"
-    | _ -> Log
-
-  let (|TopLevelProp|NestedProp|TripleNestedProp|InvalidPropPath|)
-    (propPath: string)
-    =
-    match propPath.Split('.') with
-    | [| prop |] -> TopLevelProp prop
-    | [| prop; child |] -> NestedProp(prop, child)
-    | [| prop; node; innerNode |] -> TripleNestedProp(prop, node, innerNode)
-    | _ -> InvalidPropPath
 
   type FableConfig with
 

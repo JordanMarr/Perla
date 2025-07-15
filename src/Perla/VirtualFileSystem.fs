@@ -4,6 +4,7 @@ open System
 open System.Collections.Concurrent
 open System.IO
 
+open Perla
 open Perla.Units
 open Perla.Plugins
 open Perla.Extensibility
@@ -265,12 +266,12 @@ module VirtualFs =
         return! sr.ReadToEndAsync token
       with ex ->
         // Try to return the content from the existing entry if available
-        match files.TryGetValue targetPath with
-        | true, entry ->
+        match targetPath with
+        | Found files entry ->
           match entry.kind with
           | TextFile content -> return content.content
           | _ -> return ""
-        | false, _ -> return ""
+        | _ -> return ""
     }
 
   // Refactor processNodeModulesFile
@@ -754,8 +755,8 @@ module VirtualFs =
     { new VirtualFileSystem with
         member _.Resolve(url: string<ServerUrl>) =
           if (UMX.untag url).Contains("node_modules") then
-            match nodeModulesFiles.TryGetValue url with
-            | true, entry ->
+            match url with
+            | Found nodeModulesFiles entry ->
               // Read file content on demand
               match entry.kind with
               | TextFile content ->
@@ -768,13 +769,13 @@ module VirtualFs =
                 with _ ->
                   Some(TextFile content)
               | _ -> Some entry.kind
-            | false, _ -> None
+            | _ -> None
           else
-            match files.TryGetValue url with
-            | true, entry ->
+            match url with
+            | Found files entry ->
               args.Logger.LogTrace("Resolved file {Url}", UMX.untag url)
               Some entry.kind
-            | false, _ ->
+            | _ ->
               args.Logger.LogTrace("File not found {Url}", UMX.untag url)
               None
 

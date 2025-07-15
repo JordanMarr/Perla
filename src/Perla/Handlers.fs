@@ -331,15 +331,13 @@ module Handlers =
       let (Logger logger) = container
       let (TemplateService templateService) = container
 
-      let template = voption {
-        let! username, repository, _ =
-          parseFullRepositoryName options.fullRepositoryName
-
-        return!
-          TemplateSearchKind.FullName(username, repository)
+      let template =
+        match options.fullRepositoryName with
+        | FullRepositoryName(user, repo, branch) ->
+          TemplateSearchKind.FullName(user, repo)
           |> templateService.FindOne
           |> ValueOption.ofOption
-      }
+        | _ -> ValueNone
 
       let updateRepo() = cancellableTask {
         match template with
@@ -399,18 +397,17 @@ module Handlers =
         return 0
 
       | RunTemplateOperation.Add ->
-        match parseFullRepositoryName options.fullRepositoryName with
-        | ValueSome(username, repository, branch) ->
+        match options.fullRepositoryName with
+        | FullRepositoryName(user, repo, branch) ->
           try
-            let! id =
-              templateService.Add(username, UMX.tag repository, UMX.tag branch)
+            let! id = templateService.Add(user, UMX.tag repo, UMX.tag branch)
 
             logger.LogInformation $"Template added successfully with id: {id}"
             return 0
           with ex ->
             logger.LogError(ex, "Failed to add template: {Error}", ex.Message)
             return 1
-        | ValueNone ->
+        | _ ->
           logger.LogWarning "We were unable to parse the repository name."
 
           logger.LogInformation(
@@ -843,8 +840,12 @@ module Handlers =
     let packageInfos =
       options.packages
       |> Set.map(fun pkg ->
-        let basePkg, fullImport, version = parsePackageName pkg
-        (basePkg, fullImport, version))
+        match (pkg, None) with
+        | PkgWithVersion(basePkg, fullImport, version) ->
+          basePkg, fullImport, version
+        | _ ->
+          logger.LogError("Invalid package name: {pkg}", pkg)
+          failwith $"Invalid package name: {pkg}")
 
     // Start with existing packages
     let initialPackages =
@@ -892,13 +893,11 @@ module Handlers =
     let installSet =
       packages
       |> Set.map(fun (name, version) ->
-        let basePkg, full, _ = parsePackageName name
-
-        match version with
-        | Some v when full <> basePkg ->
-          $"{basePkg}@{v}/{full.Substring(basePkg.Length + 1)}"
-        | Some v -> $"{basePkg}@{v}"
-        | None -> full)
+        match name, version with
+        | InstallString s -> s
+        | _ ->
+          logger.LogError("Invalid package name: {name}", name)
+          failwith $"Invalid package name: {name}")
 
     let! installResponse =
       logger.Spinner(
@@ -1097,13 +1096,11 @@ module Handlers =
         |> AVal.map _.dependencies
         |> AVal.force
         |> Set.map(fun ({ package = package; version = version }) ->
-          let basePkg, full, _ = parsePackageName package
-
-          match Some version with
-          | Some v when full <> basePkg ->
-            $"{basePkg}@{v}/{full.Substring(basePkg.Length + 1)}"
-          | Some v -> $"{basePkg}@{v}"
-          | None -> full)
+          match package, Some version with
+          | InstallString s -> s
+          | _ ->
+            logger.LogError("Invalid package name: {package}", package)
+            failwith $"Invalid package name: {package}")
 
       logger.LogDebug("Found Dependencies: {dependencies}", packages)
 
