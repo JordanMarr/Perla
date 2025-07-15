@@ -97,13 +97,21 @@ type VirtualFileSystemArgs = {
 
 module VirtualFs =
 
-  type FileChangeEventData = {
-    serverPath: string<ServerUrl>
-    userPath: string<UserPath>
-    changeType: ChangeKind
-    path: string<SystemPath>
-    name: string<SystemPath>
+  // Move these type definitions to the top of the module
+  type VfsServiceDeps = {
+    logger: ILogger
+    extensibility: ExtensibilityService
+    files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>
+    nodeModulesFiles: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>
   }
+
+  type ProcessFileArgs = {
+    systemPath: string<SystemPath>
+    userPath: string<UserPath>
+    serverPath: string<ServerUrl>
+  }
+
+  type ProcessFileChangeEventArgs = { event: FileChangedEvent }
 
   let getMimeType(filename: string) =
     filename
@@ -236,7 +244,11 @@ module VirtualFs =
         return fileTransform
     }
 
-  let readFileContent (sourcePath: string) (targetPath: string<ServerUrl>) (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>) =
+  let readFileContent
+    (sourcePath: string)
+    (targetPath: string<ServerUrl>)
+    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
+    =
     asyncEx {
       let! token = Async.CancellationToken
 
@@ -261,46 +273,73 @@ module VirtualFs =
         | false, _ -> return ""
     }
 
+  // Refactor processNodeModulesFile
+  type ProcessNodeModulesFileArgs = {
+    systemPath: string<SystemPath>
+    targetPath: string<ServerUrl>
+    filename: string
+    extension: string
+  }
+
   let processNodeModulesFile
-    (logger: ILogger)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
-    (systemPath: string<SystemPath>)
-    (targetPath: string<ServerUrl>)
-    (filename: string)
-    (extension: string)
+    (deps: VfsServiceDeps)
+    (args: ProcessNodeModulesFileArgs)
     =
+    let {
+          systemPath = systemPath
+          targetPath = targetPath
+          filename = filename
+          extension = extension
+        } =
+      args
+
     async {
       let sourcePath = UMX.untag systemPath
-      logger.LogDebug("Skipping file in node_modules: {FilePath}", sourcePath)
 
-      let! content = readFileContent sourcePath targetPath files
+      deps.logger.LogDebug(
+        "Registering file in node_modules: {FilePath}",
+        sourcePath
+      )
 
       let entry = {
         kind =
           TextFile {
             filename = Path.GetFileName sourcePath |> nonNull
             mimetype = getMimeType(filename + extension)
-            content = content
+            content = "" // Content is empty for node_modules
             source = systemPath
           }
         lastModified = File.GetLastWriteTime(sourcePath)
       }
 
-      files[targetPath] <- entry
-      logger.LogTrace("Processed text file {FilePath}", sourcePath)
+      deps.nodeModulesFiles[targetPath] <- entry
+
+      deps.logger.LogTrace(
+        "Registered node_modules file {FilePath}",
+        sourcePath
+      )
     }
 
-  let processBinaryFile
-    (logger: ILogger)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
-    (systemPath: string<SystemPath>)
-    (targetPath: string<ServerUrl>)
-    (filename: string)
-    (mimeType: string)
-    =
+  // Refactor processBinaryFile
+  type ProcessBinaryFileArgs = {
+    systemPath: string<SystemPath>
+    targetPath: string<ServerUrl>
+    filename: string
+    mimeType: string
+  }
+
+  let processBinaryFile (deps: VfsServiceDeps) (args: ProcessBinaryFileArgs) =
+    let {
+          systemPath = systemPath
+          targetPath = targetPath
+          filename = filename
+          mimeType = mimeType
+        } =
+      args
+
     async {
       let sourcePath = UMX.untag systemPath
-      // Try-catch only the dangerous IO operations
+
       try
         let binaryInfo = {
           filename = filename
@@ -313,45 +352,56 @@ module VirtualFs =
           lastModified = File.GetLastWriteTime sourcePath
         }
 
-        files[targetPath] <- entry
-        logger.LogTrace("Processed binary file {FilePath}", sourcePath)
+        deps.files[targetPath] <- entry
+        deps.logger.LogTrace("Processed binary file {FilePath}", sourcePath)
       with ex ->
-        logger.LogError(
+        deps.logger.LogError(
           "Error processing binary file {FilePath}, {error}",
           sourcePath
         )
 
-        logger.LogTrace("Exception: {Error}", ex)
+        deps.logger.LogTrace("Exception: {Error}", ex)
     }
 
+  // Refactor processTextFileWithPlugins
+  type ProcessTextFileWithPluginsArgs = {
+    systemPath: string<SystemPath>
+    targetPath: string<ServerUrl>
+    filename: string
+    extension: string
+    content: string
+  }
+
   let processTextFileWithPlugins
-    (logger: ILogger)
-    (extensibility: ExtensibilityService)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
-    (systemPath: string<SystemPath>)
-    (targetPath: string<ServerUrl>)
-    (filename: string)
-    (extension: string)
-    (content: string)
+    (deps: VfsServiceDeps)
+    (args: ProcessTextFileWithPluginsArgs)
     =
+    let {
+          systemPath = systemPath
+          targetPath = targetPath
+          filename = filename
+          extension = extension
+          content = content
+        } =
+      args
+
     async {
       let sourcePath = UMX.untag systemPath
+
       let! transform =
-        applyPlugins logger extensibility content sourcePath extension
+        applyPlugins deps.logger deps.extensibility content sourcePath extension
         |> Async.Catch
 
       match transform with
       | Choice2Of2 ex ->
-        logger.LogError(
+        deps.logger.LogError(
           "Error applying plugins to file {FilePath}",
           sourcePath
         )
 
-        logger.LogTrace("Exception: {Error}", ex)
-
+        deps.logger.LogTrace("Exception: {Error}", ex)
         return ()
       | Choice1Of2 transform ->
-
         let fileContent = {
           filename = Path.GetFileName sourcePath |> nonNull
           mimetype = getMimeType(filename + transform.extension)
@@ -367,11 +417,9 @@ module VirtualFs =
             let dir = Path.GetDirectoryName(UMX.untag targetPath) |> nonNull
 
             let newPath =
-              UMX.tag<ServerUrl>(
-                Path.Combine(dir, newName).Replace("\\", "/")
-              )
+              UMX.tag<ServerUrl>(Path.Combine(dir, newName).Replace("\\", "/"))
 
-            logger.LogDebug(
+            deps.logger.LogDebug(
               "File extension transformed from {OldExt} to {NewExt}, path changed to {NewPath}",
               extension,
               transform.extension,
@@ -388,24 +436,25 @@ module VirtualFs =
             lastModified = File.GetLastWriteTime(sourcePath)
           }
 
-          files[finalPath] <- entry
-          logger.LogTrace("Processed text file {FilePath}", sourcePath)
+          deps.files[finalPath] <- entry
+          deps.logger.LogTrace("Processed text file {FilePath}", sourcePath)
         with ex ->
-          logger.LogError(
+          deps.logger.LogError(
             "Error storing processed text file {FilePath} - {Error}",
             sourcePath,
             ex
           )
     }
 
-  let processFile
-    (logger: ILogger)
-    (extensibility: ExtensibilityService)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
-    (systemPath: string<SystemPath>)
-    (userPath: string<UserPath>)
-    (serverPath: string<ServerUrl>)
-    =
+  // Update processFile to use the new helpers
+  let processFile (deps: VfsServiceDeps) (args: ProcessFileArgs) =
+    let {
+          systemPath = systemPath
+          userPath = userPath
+          serverPath = serverPath
+        } =
+      args
+
     async {
       let sourcePath = UMX.untag systemPath
       let extension = Path.GetExtension(sourcePath) |> defaultIfNull ""
@@ -414,147 +463,164 @@ module VirtualFs =
       let targetPath = transformSourcePath systemPath userPath serverPath
 
       if sourcePath.Contains("node_modules") then
-        do! processNodeModulesFile logger files systemPath targetPath filename extension
+        do!
+          processNodeModulesFile deps {
+            systemPath = systemPath
+            targetPath = targetPath
+            filename = filename
+            extension = extension
+          }
       else
-        logger.LogDebug(
+        deps.logger.LogDebug(
           "Processing file {FilePath} -> {TargetPath}",
           sourcePath,
           UMX.untag targetPath
         )
 
         if mimeType = MimeTypeNames.Binary then
-          do! processBinaryFile logger files systemPath targetPath filename mimeType
+          do!
+            processBinaryFile deps {
+              systemPath = systemPath
+              targetPath = targetPath
+              filename = filename
+              mimeType = mimeType
+            }
         else
-          // Read file with FileShare.ReadWrite to avoid lock issues
-          let! content = readFileContent sourcePath targetPath files
+          let! content = readFileContent sourcePath targetPath deps.files
 
-          // Log warning if there was an issue reading the file
           if content = "" then
-            logger.LogWarning(
+            deps.logger.LogWarning(
               "Could not read file {FilePath} due to IO exception (possibly locked by another process)",
               sourcePath
             )
 
-          do! processTextFileWithPlugins logger extensibility files systemPath targetPath filename extension content
-    }
-
-  let loadAllFiles
-    (logger: ILogger)
-    (extensibility: ExtensibilityService)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
-    (mountedDirs: MountedDirectories)
-    =
-    async {
-      let sourceFiles = collectSourceFiles logger mountedDirs
-
-      logger.LogInformation(
-        "Loading {FileCount} files from {DirCount} mounted directories",
-        sourceFiles.Length,
-        mountedDirs.Count
-      )
-
-      do!
-        sourceFiles
-        |> List.map(fun (systemPath, serverPath, userPath) ->
-          processFile logger extensibility files systemPath userPath serverPath)
-        |> Async.Parallel
-        |> Async.Ignore
-
-      logger.LogInformation(
-        "Successfully loaded all files into virtual file system"
-      )
+          do!
+            processTextFileWithPlugins deps {
+              systemPath = systemPath
+              targetPath = targetPath
+              filename = filename
+              extension = extension
+              content = content
+            }
     }
 
   let processFileChangeEvent
-    (logger: ILogger)
-    (extensibility: ExtensibilityService)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
-    (event: FileChangedEvent)
+    (deps: VfsServiceDeps)
+    (args: ProcessFileChangeEventArgs)
     =
     async {
+      let event = args.event
+
       try
-        logger.LogInformation(
+        deps.logger.LogInformation(
           "Processing file change event {ChangeType} for {FilePath}",
           event.changeType,
           UMX.untag event.path
         )
 
-        match event.changeType with
-        | Deleted ->
-          let targetPath =
-            transformSourcePath event.path event.userPath event.serverPath
+        let isNodeModules = (UMX.untag event.path).Contains("node_modules")
 
-          let removed = files.TryRemove targetPath
+        if isNodeModules then
+          // We do not watch or process node_modules file changes
+          ()
+        else
+          match event.changeType with
+          | Deleted ->
+            let targetPath =
+              transformSourcePath event.path event.userPath event.serverPath
 
-          if fst removed then
-            logger.LogDebug(
-              "Removed file {FilePath} from virtual file system",
-              UMX.untag targetPath
-            )
-          else
-            logger.LogWarning(
-              "Attempted to remove non-existent file {FilePath}",
-              UMX.untag targetPath
-            )
-        | Created
-        | Changed ->
-          // Always update the entry for the current file
-          do!
-            processFile
-              logger
-              extensibility
-              files
-              event.path
-              event.userPath
-              event.serverPath
-        | Renamed ->
-          // Remove the old entry if present
-          match event.oldPath, event.oldName with
-          | Some oldSystemPath, Some _ ->
-            let oldTargetPath =
-              transformSourcePath oldSystemPath event.userPath event.serverPath
-
-            let removed = files.TryRemove oldTargetPath
+            let removed = deps.files.TryRemove targetPath
 
             if fst removed then
-              logger.LogDebug(
-                "Removed old file {FilePath} due to rename",
-                UMX.untag oldTargetPath
+              deps.logger.LogDebug(
+                "Removed file {FilePath} from virtual file system",
+                UMX.untag targetPath
               )
             else
-              logger.LogWarning(
-                "Attempted to remove non-existent old file {FilePath} during rename",
-                UMX.untag oldTargetPath
+              deps.logger.LogWarning(
+                "Attempted to remove non-existent file {FilePath}",
+                UMX.untag targetPath
               )
-          | _ -> ()
-          // Add/update the new file
-          do!
-            processFile
-              logger
-              extensibility
-              files
-              event.path
-              event.userPath
-              event.serverPath
+          | Created
+          | Changed ->
+            // Always update the entry for the current file
+            do!
+              processFile deps {
+                systemPath = event.path
+                userPath = event.userPath
+                serverPath = event.serverPath
+              }
+          | Renamed ->
+            // Remove the old entry if present
+            match event.oldPath, event.oldName with
+            | Some oldSystemPath, Some _ ->
+              let oldTargetPath =
+                transformSourcePath
+                  oldSystemPath
+                  event.userPath
+                  event.serverPath
+
+              let removed = deps.files.TryRemove oldTargetPath
+
+              if fst removed then
+                deps.logger.LogDebug(
+                  "Removed old file {FilePath} due to rename",
+                  UMX.untag oldTargetPath
+                )
+              else
+                deps.logger.LogWarning(
+                  "Attempted to remove non-existent old file {FilePath} during rename",
+                  UMX.untag oldTargetPath
+                )
+            | _ -> ()
+            // Add/update the new file
+            do!
+              processFile deps {
+                systemPath = event.path
+                userPath = event.userPath
+                serverPath = event.serverPath
+              }
       with ex ->
-        logger.LogError(
+        deps.logger.LogError(
           ex,
           "Error processing file change event for {FilePath}",
           UMX.untag event.path
         )
     }
 
+  let loadAllFiles (deps: VfsServiceDeps) (mountedDirs: MountedDirectories) = async {
+    let sourceFiles = collectSourceFiles deps.logger mountedDirs
+
+    deps.logger.LogInformation(
+      "Loading {FileCount} files from {DirCount} mounted directories",
+      sourceFiles.Length,
+      mountedDirs.Count
+    )
+
+    do!
+      sourceFiles
+      |> List.map(fun (systemPath, serverPath, userPath) ->
+        processFile deps {
+          systemPath = systemPath
+          userPath = userPath
+          serverPath = serverPath
+        })
+      |> Async.Parallel
+      |> Async.Ignore
+
+    deps.logger.LogInformation(
+      "Successfully loaded all files into virtual file system"
+    )
+  }
+
   let createFileChangeStream
-    (logger: ILogger)
-    (extensibility: ExtensibilityService)
-    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
+    (deps: VfsServiceDeps)
     (watchers: ResizeArray<FileSystemWatcher>)
     (mountedDirs: MountedDirectories)
     : IObservable<FileChangedEvent> =
-
     let fileChangeObservables = ResizeArray<IObservable<FileChangedEvent>>()
 
-    logger.LogDebug(
+    deps.logger.LogDebug(
       "Creating file change stream for {DirCount} mounted directories",
       mountedDirs.Count
     )
@@ -563,7 +629,7 @@ module VirtualFs =
       let fullPath = Path.GetFullPath(UMX.untag userPath)
 
       if Directory.Exists fullPath then
-        logger.LogDebug(
+        deps.logger.LogDebug(
           "Setting up file watcher for {Directory} -> {ServerPath}",
           fullPath,
           UMX.untag serverPath
@@ -582,7 +648,9 @@ module VirtualFs =
           Observable.merge
             (Observable.merge watcher.Changed watcher.Created)
             watcher.Deleted
-          |> Observable.filter(fun e -> not(shouldIgnoreFile e.FullPath))
+          |> Observable.filter(fun e ->
+            not(shouldIgnoreFile e.FullPath)
+            && not(e.FullPath.Contains("node_modules")))
           |> Observable.map(fun (e: FileSystemEventArgs) ->
             let systemPath = UMX.tag<SystemPath> e.FullPath
 
@@ -614,7 +682,9 @@ module VirtualFs =
 
         let renamedEvents =
           watcher.Renamed
-          |> Observable.filter(fun e -> not(shouldIgnoreFile e.FullPath))
+          |> Observable.filter(fun e ->
+            not(shouldIgnoreFile e.FullPath)
+            && not(e.FullPath.Contains("node_modules")))
           |> Observable.map(fun (e: RenamedEventArgs) ->
             let systemPath = UMX.tag<SystemPath> e.FullPath
             let relativeUserPath = Path.GetRelativePath(fullPath, e.FullPath)
@@ -639,17 +709,16 @@ module VirtualFs =
 
         fileChangeObservables.Add(Observable.merge fileEvents renamedEvents)
       else
-        logger.LogWarning(
+        deps.logger.LogWarning(
           "Directory {Directory} does not exist, skipping file watcher setup",
           fullPath
         )
-
 
     // Set up the processing pipeline
     fileChangeObservables
     |> Observable.mergeSeq
     |> Observable.map(fun event -> async {
-      do! processFileChangeEvent logger extensibility files event
+      do! processFileChangeEvent deps { event = event }
       return event
     })
     |> Observable.switchAsync
@@ -670,6 +739,10 @@ module VirtualFs =
   /// Create and initialize a new VirtualFileSystem instance
   let Create(args: VirtualFileSystemArgs) =
     let files = ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>()
+
+    let nodeModulesFiles =
+      ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>()
+
     let watchers = ResizeArray<FileSystemWatcher>()
 
     let fileChangedSubject = Subject<FileChangedEvent>.broadcast
@@ -680,13 +753,30 @@ module VirtualFs =
 
     { new VirtualFileSystem with
         member _.Resolve(url: string<ServerUrl>) =
-          match files.TryGetValue url with
-          | true, entry ->
-            args.Logger.LogTrace("Resolved file {Url}", UMX.untag url)
-            Some entry.kind
-          | false, _ ->
-            args.Logger.LogTrace("File not found {Url}", UMX.untag url)
-            None
+          if (UMX.untag url).Contains("node_modules") then
+            match nodeModulesFiles.TryGetValue url with
+            | true, entry ->
+              // Read file content on demand
+              match entry.kind with
+              | TextFile content ->
+                let filePath = UMX.untag content.source
+
+                try
+                  let fileContent = File.ReadAllText(filePath)
+                  let updatedContent = { content with content = fileContent }
+                  Some(TextFile updatedContent)
+                with _ ->
+                  Some(TextFile content)
+              | _ -> Some entry.kind
+            | false, _ -> None
+          else
+            match files.TryGetValue url with
+            | true, entry ->
+              args.Logger.LogTrace("Resolved file {Url}", UMX.untag url)
+              Some entry.kind
+            | false, _ ->
+              args.Logger.LogTrace("File not found {Url}", UMX.untag url)
+              None
 
         member _.Load(mountedDirs: MountedDirectories) = async {
           args.Logger.LogDebug(
@@ -695,13 +785,24 @@ module VirtualFs =
           )
 
           // Load all files initially and create the file change stream with watchers
-          do! loadAllFiles args.Logger args.Extensibility files mountedDirs
+          do!
+            loadAllFiles
+              {
+                logger = args.Logger
+                extensibility = args.Extensibility
+                files = files
+                nodeModulesFiles = nodeModulesFiles
+              }
+              mountedDirs
 
           let connectable =
             createFileChangeStream
-              args.Logger
-              args.Extensibility
-              files
+              {
+                logger = args.Logger
+                extensibility = args.Extensibility
+                files = files
+                nodeModulesFiles = nodeModulesFiles
+              }
               watchers
               mountedDirs
             |> Observable.multicast fileChangedSubject
@@ -726,7 +827,7 @@ module VirtualFs =
             outputDir
           )
 
-          Directory.CreateDirectory(outputDir) |> ignore
+          Directory.CreateDirectory outputDir |> ignore
 
           let mutable fileCount = 0
 
