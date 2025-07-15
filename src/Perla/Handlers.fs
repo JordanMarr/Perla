@@ -446,10 +446,30 @@ module Handlers =
           return 1
     }
 
+  // Helper to adaptively add /node_modules mount if needed
+  let withNodeModules(config: PerlaConfig aval) =
+    config
+    |> AVal.map(fun config ->
+      let hasKey =
+        config.mountDirectories
+        |> Map.containsKey(UMX.tag<ServerUrl> "/node_modules")
+
+      if config.useLocalPkgs && not hasKey then
+        {
+          config with
+              mountDirectories =
+                config.mountDirectories
+                |> Map.add
+                  (UMX.tag<ServerUrl> "/node_modules")
+                  (UMX.tag<UserPath> "./node_modules")
+        }
+      else
+        config)
+
   let runBuild (container: AppContainer) (options: BuildOptions) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
 
-    let config = container.Configuration.PerlaConfig
+    let config = container.Configuration.PerlaConfig |> withNodeModules
 
     // Step 1: Fable build (if configured)
     do! container.BuildService.RunFable(config)
@@ -489,14 +509,11 @@ module Handlers =
 
     let map =
       container.FsManager.ResolveImportMap
-      |> ImportMaps.withPathsA container.Configuration.PerlaConfig
+      |> ImportMaps.withPathsA config
       |> AVal.map2 ImportMaps.cleanupLocalPaths (config |> AVal.map _.paths)
       |> AVal.force
 
-    let externals =
-      ImportMaps.getExternalsFromPaths(
-        container.Configuration.PerlaConfig |> AVal.map _.paths
-      )
+    let externals = ImportMaps.getExternalsFromPaths(config |> AVal.map _.paths)
 
     let cssPaths, jsBundleEntrypoints, jsStandalonePaths =
       Build.EntryPoints document
@@ -536,7 +553,7 @@ module Handlers =
         {
           Logger = container.Logger
           VirtualFileSystem = container.VirtualFileSystem
-          Config = container.Configuration.PerlaConfig
+          Config = config
           FsManager = container.FsManager
           FileChangedEvents = container.VirtualFileSystem.FileChanges
         }
@@ -560,6 +577,7 @@ module Handlers =
             }
             esbuild.minify = false
       })
+      |> withNodeModules
 
     let config = configA |> AVal.force
     let fableConfig = config.fable

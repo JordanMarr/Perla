@@ -135,36 +135,30 @@ module VirtualFs =
     for KeyValue(serverPath, userPath) in mountedDirs do
       let fullPath = Path.GetFullPath(UMX.untag userPath)
 
-      if Directory.Exists fullPath then
-        logger.LogDebug(
-          "Collecting source files from {Directory} -> {ServerPath}",
-          fullPath,
-          UMX.untag serverPath
-        )
+      logger.LogDebug(
+        "Collecting source files from {Directory} -> {ServerPath}",
+        fullPath,
+        UMX.untag serverPath
+      )
 
-        let files =
-          !! $"{fullPath}/**/*"
-          -- $"{fullPath}/**/bin/**"
-          -- $"{fullPath}/**/obj/**"
-          -- $"{fullPath}/**/*.fs"
-          -- $"{fullPath}/**/*.fsproj"
-          -- $"{fullPath}/**/*.fsx"
+      let files =
+        !! $"{fullPath}/**/*"
+        -- $"{fullPath}/**/bin/**"
+        -- $"{fullPath}/**/obj/**"
+        -- $"{fullPath}/**/*.fs"
+        -- $"{fullPath}/**/*.fsproj"
+        -- $"{fullPath}/**/*.fsx"
 
-        let fileList = files |> Seq.toList
+      let fileList = files |> Seq.toList
 
-        logger.LogDebug(
-          "Found {FileCount} files in {Directory}",
-          fileList.Length,
-          fullPath
-        )
+      logger.LogDebug(
+        "Found {FileCount} files in {Directory}",
+        fileList.Length,
+        fullPath
+      )
 
-        for file in fileList do
-          UMX.tag<SystemPath> file, serverPath, UMX.tag<UserPath> fullPath
-      else
-        logger.LogWarning(
-          "Directory {Directory} does not exist, skipping",
-          fullPath
-        )
+      for file in fileList do
+        UMX.tag<SystemPath> file, serverPath, UMX.tag<UserPath> fullPath
   ]
 
   let transformSourcePath

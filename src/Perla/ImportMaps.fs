@@ -91,11 +91,23 @@ module ImportMaps =
           replacementStr
         else
           replacementStr
-      // Compute absolute paths relative to projectRoot (sourcesRoot)
+      // Ensure importingDir is absolute, fallback to sourcesRoot if empty
       let importingDirAbs =
-        System.IO.Path.GetFullPath(importingDir, UMX.untag sourcesRoot)
+        let dir =
+          if System.String.IsNullOrWhiteSpace(importingDir) then
+            UMX.untag sourcesRoot
+          elif System.IO.Path.IsPathRooted(importingDir) then
+            importingDir
+          else
+            System.IO.Path.Combine(UMX.untag sourcesRoot, importingDir)
 
-      let targetAbs = System.IO.Path.GetFullPath(target, UMX.untag sourcesRoot)
+        System.IO.Path.GetFullPath(dir)
+
+      let targetAbs =
+        if System.IO.Path.IsPathRooted(target) then
+          System.IO.Path.GetFullPath(target)
+        else
+          System.IO.Path.GetFullPath(target, UMX.untag sourcesRoot)
 
       let rel =
         System.IO.Path
@@ -108,7 +120,9 @@ module ImportMaps =
         else
           "./" + rel
 
-      rel.TrimEnd('/') + "/" + rest.TrimStart('/')
+      let rel = rel.TrimEnd('/')
+      let rest = rest.TrimStart('/')
+      if rest = "" then rel else rel + "/" + rest
 
     let computeNewImport
       (importingDir: string)
@@ -129,8 +143,16 @@ module ImportMaps =
     let replaceMatch(m: System.Text.RegularExpressions.Match) : string =
       let moduleName = extractModuleName m
 
+      // Ensure importingFile is absolute, fallback to sourcesRoot if not
+      let importingFileAbs =
+        if System.IO.Path.IsPathRooted(importingFile) then
+          importingFile
+        else
+          System.IO.Path.Combine(UMX.untag sourcesRoot, importingFile)
+          |> System.IO.Path.GetFullPath
+
       let importingDir =
-        System.IO.Path.GetDirectoryName(importingFile) |> nonNull
+        System.IO.Path.GetDirectoryName(importingFileAbs) |> nonNull
 
       let tryReplace
         (prefix: string<BareImport>, replacement: string<ResolutionUrl>)
