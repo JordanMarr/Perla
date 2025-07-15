@@ -55,6 +55,7 @@ type PlatformOps =
   abstract IsFableAvailable: unit -> CancellableTask<bool>
 
   abstract RunEsbuildTransform:
+    esbuildPath: string<SystemPath> *
     sourceCode: string *
     loader: string option *
     target: string *
@@ -330,6 +331,7 @@ module PlatformOps =
 
         member _.RunEsbuildTransform
           (
+            esbuildPath,
             sourceCode,
             loader,
             target,
@@ -344,7 +346,7 @@ module PlatformOps =
 
             let command =
               Cli
-                .Wrap("esbuild")
+                .Wrap(esbuildPath |> UMX.untag)
                 .WithStandardInputPipe(PipeSource.FromString sourceCode)
                 .WithStandardOutputPipe(PipeTarget.ToStream writer)
                 .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)

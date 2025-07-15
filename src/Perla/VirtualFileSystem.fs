@@ -236,6 +236,168 @@ module VirtualFs =
         return fileTransform
     }
 
+  let readFileContent (sourcePath: string) (targetPath: string<ServerUrl>) (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>) =
+    asyncEx {
+      let! token = Async.CancellationToken
+
+      try
+        use fs =
+          new FileStream(
+            sourcePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite
+          )
+
+        use sr = new StreamReader(fs)
+        return! sr.ReadToEndAsync token
+      with ex ->
+        // Try to return the content from the existing entry if available
+        match files.TryGetValue targetPath with
+        | true, entry ->
+          match entry.kind with
+          | TextFile content -> return content.content
+          | _ -> return ""
+        | false, _ -> return ""
+    }
+
+  let processNodeModulesFile
+    (logger: ILogger)
+    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
+    (systemPath: string<SystemPath>)
+    (targetPath: string<ServerUrl>)
+    (filename: string)
+    (extension: string)
+    =
+    async {
+      let sourcePath = UMX.untag systemPath
+      logger.LogDebug("Skipping file in node_modules: {FilePath}", sourcePath)
+
+      let! content = readFileContent sourcePath targetPath files
+
+      let entry = {
+        kind =
+          TextFile {
+            filename = Path.GetFileName sourcePath |> nonNull
+            mimetype = getMimeType(filename + extension)
+            content = content
+            source = systemPath
+          }
+        lastModified = File.GetLastWriteTime(sourcePath)
+      }
+
+      files[targetPath] <- entry
+      logger.LogTrace("Processed text file {FilePath}", sourcePath)
+    }
+
+  let processBinaryFile
+    (logger: ILogger)
+    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
+    (systemPath: string<SystemPath>)
+    (targetPath: string<ServerUrl>)
+    (filename: string)
+    (mimeType: string)
+    =
+    async {
+      let sourcePath = UMX.untag systemPath
+      // Try-catch only the dangerous IO operations
+      try
+        let binaryInfo = {
+          filename = filename
+          mimetype = mimeType
+          source = systemPath
+        }
+
+        let entry = {
+          kind = BinaryFile binaryInfo
+          lastModified = File.GetLastWriteTime sourcePath
+        }
+
+        files[targetPath] <- entry
+        logger.LogTrace("Processed binary file {FilePath}", sourcePath)
+      with ex ->
+        logger.LogError(
+          "Error processing binary file {FilePath}, {error}",
+          sourcePath
+        )
+
+        logger.LogTrace("Exception: {Error}", ex)
+    }
+
+  let processTextFileWithPlugins
+    (logger: ILogger)
+    (extensibility: ExtensibilityService)
+    (files: ConcurrentDictionary<string<ServerUrl>, VirtualFileEntry>)
+    (systemPath: string<SystemPath>)
+    (targetPath: string<ServerUrl>)
+    (filename: string)
+    (extension: string)
+    (content: string)
+    =
+    async {
+      let sourcePath = UMX.untag systemPath
+      let! transform =
+        applyPlugins logger extensibility content sourcePath extension
+        |> Async.Catch
+
+      match transform with
+      | Choice2Of2 ex ->
+        logger.LogError(
+          "Error applying plugins to file {FilePath}",
+          sourcePath
+        )
+
+        logger.LogTrace("Exception: {Error}", ex)
+
+        return ()
+      | Choice1Of2 transform ->
+
+        let fileContent = {
+          filename = Path.GetFileName sourcePath |> nonNull
+          mimetype = getMimeType(filename + transform.extension)
+          content = transform.content
+          source = systemPath
+        }
+
+        let finalPath =
+          if transform.extension <> extension then
+            let newName =
+              $"{Path.GetFileNameWithoutExtension(sourcePath)}{transform.extension}"
+
+            let dir = Path.GetDirectoryName(UMX.untag targetPath) |> nonNull
+
+            let newPath =
+              UMX.tag<ServerUrl>(
+                Path.Combine(dir, newName).Replace("\\", "/")
+              )
+
+            logger.LogDebug(
+              "File extension transformed from {OldExt} to {NewExt}, path changed to {NewPath}",
+              extension,
+              transform.extension,
+              UMX.untag newPath
+            )
+
+            newPath
+          else
+            targetPath
+
+        try
+          let entry = {
+            kind = TextFile fileContent
+            lastModified = File.GetLastWriteTime(sourcePath)
+          }
+
+          files[finalPath] <- entry
+          logger.LogTrace("Processed text file {FilePath}", sourcePath)
+        with ex ->
+          logger.LogError(
+            "Error storing processed text file {FilePath} - {Error}",
+            sourcePath,
+            ex
+          )
+    }
+
   let processFile
     (logger: ILogger)
     (extensibility: ExtensibilityService)
@@ -245,13 +407,15 @@ module VirtualFs =
     (serverPath: string<ServerUrl>)
     =
     async {
-      try
-        let sourcePath = UMX.untag systemPath
-        let extension = Path.GetExtension(sourcePath) |> defaultIfNull ""
-        let filename = Path.GetFileName(sourcePath) |> nonNull
-        let mimeType = getMimeType filename
-        let targetPath = transformSourcePath systemPath userPath serverPath
+      let sourcePath = UMX.untag systemPath
+      let extension = Path.GetExtension(sourcePath) |> defaultIfNull ""
+      let filename = Path.GetFileName(sourcePath) |> nonNull
+      let mimeType = getMimeType filename
+      let targetPath = transformSourcePath systemPath userPath serverPath
 
+      if sourcePath.Contains("node_modules") then
+        do! processNodeModulesFile logger files systemPath targetPath filename extension
+      else
         logger.LogDebug(
           "Processing file {FilePath} -> {TargetPath}",
           sourcePath,
@@ -259,97 +423,19 @@ module VirtualFs =
         )
 
         if mimeType = MimeTypeNames.Binary then
-          let binaryInfo = {
-            filename = filename
-            mimetype = mimeType
-            source = systemPath
-          }
-
-          let entry = {
-            kind = BinaryFile binaryInfo
-            lastModified = File.GetLastWriteTime(sourcePath)
-          }
-
-          files[targetPath] <- entry
-          logger.LogTrace("Processed binary file {FilePath}", sourcePath)
+          do! processBinaryFile logger files systemPath targetPath filename mimeType
         else
           // Read file with FileShare.ReadWrite to avoid lock issues
-          let! content = asyncEx {
-            let! token = Async.CancellationToken
+          let! content = readFileContent sourcePath targetPath files
 
-            try
-              use fs =
-                new FileStream(
-                  sourcePath,
-                  FileMode.Open,
-                  FileAccess.Read,
-                  FileShare.ReadWrite
-                )
+          // Log warning if there was an issue reading the file
+          if content = "" then
+            logger.LogWarning(
+              "Could not read file {FilePath} due to IO exception (possibly locked by another process)",
+              sourcePath
+            )
 
-              use sr = new StreamReader(fs)
-              return! sr.ReadToEndAsync token
-            with ex ->
-              logger.LogWarning(
-                ex,
-                "Could not read file {FilePath} due to IO exception (possibly locked by another process)",
-                sourcePath
-              )
-              // Try to return the content from the existing entry if available
-              match files.TryGetValue targetPath with
-              | true, entry ->
-                match entry.kind with
-                | TextFile content -> return content.content
-                | _ -> return ""
-              | false, _ -> return ""
-          }
-
-
-          let! transform =
-            applyPlugins logger extensibility content sourcePath extension
-
-          let fileContent = {
-            filename = Path.GetFileName(sourcePath) |> nonNull
-            mimetype = getMimeType(filename + transform.extension)
-            content = transform.content
-            source = systemPath
-          }
-
-          let finalPath =
-            if transform.extension <> extension then
-              let newName =
-                $"{Path.GetFileNameWithoutExtension(sourcePath)}{transform.extension}"
-
-              let dir = Path.GetDirectoryName(UMX.untag targetPath) |> nonNull
-
-              let newPath =
-                UMX.tag<ServerUrl>(
-                  Path.Combine(dir, newName).Replace("\\", "/")
-                )
-
-              logger.LogDebug(
-                "File extension transformed from {OldExt} to {NewExt}, path changed to {NewPath}",
-                extension,
-                transform.extension,
-                UMX.untag newPath
-              )
-
-              newPath
-            else
-              targetPath
-
-          let entry = {
-            kind = TextFile fileContent
-            lastModified = File.GetLastWriteTime(sourcePath)
-          }
-
-          files[finalPath] <- entry
-          logger.LogTrace("Processed text file {FilePath}", sourcePath)
-      with ex ->
-        logger.LogError(
-          ex,
-          "Error processing file {FilePath}",
-          UMX.untag systemPath
-        )
+          do! processTextFileWithPlugins logger extensibility files systemPath targetPath filename extension content
     }
 
   let loadAllFiles

@@ -53,7 +53,8 @@ module Esbuild =
       loader: LoaderType option,
       config: EsbuildConfig,
       tsconfig: string option,
-      platformOps: PlatformOps
+      platformOps: PlatformOps,
+      pfsm: PerlaFsManager
     ) =
     cancellableTask {
       let loaderStr =
@@ -68,6 +69,7 @@ module Esbuild =
 
       let! result =
         platformOps.RunEsbuildTransform(
+          pfsm.ResolveEsbuildPath(),
           source,
           loaderStr,
           config.ecmaVersion,
@@ -109,7 +111,8 @@ module Esbuild =
                   loader,
                   config,
                   tsConfig,
-                  serviceArgs.PlatformOps
+                  serviceArgs.PlatformOps,
+                  serviceArgs.PerlaFsManager
                 )
 
                 |> Async.AwaitCancellableTask

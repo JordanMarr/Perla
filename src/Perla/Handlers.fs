@@ -475,10 +475,10 @@ module Handlers =
     // cleanup any leftovers of a previous build
     let outDir = DirectoryInfo(UMX.untag config.build.outDir)
 
-    let tempDir =
-      Path.GetTempPath() + Path.GetRandomFileName() |> UMX.tag<SystemPath>
+    let vfsOutputDir =
+      ".tmp/perla/vfs" |> Path.GetFullPath |> UMX.tag<SystemPath>
 
-    Directory.CreateDirectory(UMX.untag tempDir) |> ignore
+    Directory.CreateDirectory(UMX.untag vfsOutputDir) |> ignore
 
     try
       outDir.Delete(true)
@@ -505,7 +505,7 @@ module Handlers =
       if isPathsReplacerPresent || not(Map.isEmpty config.paths) then
         ImportMaps.createPathsReplacerPlugin
           (container.Configuration.PerlaConfig |> AVal.map _.paths)
-          tempDir
+          vfsOutputDir
 
 
       if isEsbuildPluginPresent then
@@ -528,7 +528,7 @@ module Handlers =
       )
 
     // copy the vfs to a dis location
-    let! tempDir = container.VirtualFileSystem.ToDisk tempDir
+    let! tempDir = container.VirtualFileSystem.ToDisk vfsOutputDir
 
 
     container.Logger.LogInformation(

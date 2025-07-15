@@ -44,6 +44,8 @@ module Env =
         PerlaDirectories = directories
         RequestHandler = requestHandler
       }
+    // add it to the path
+    pfsm.ResolveEsbuildPath() |> ignore
 
     AppContainer.Create {
       Logger = AppLogger

@@ -76,10 +76,7 @@ type PerlaArguments =
 
   static member Properties: Argument<string array> =
     let parser(result: ArgumentResult) =
-      result.Tokens
-      |> Seq.map(_.Value)
-      |> Seq.distinct
-      |> Seq.toArray
+      result.Tokens |> Seq.map(_.Value) |> Seq.distinct |> Seq.toArray
 
     Argument<string array>(
       "properties",
@@ -94,39 +91,84 @@ type GlobalOptions = {
   skipPrompts: bool
   previewCommand: bool
   setup: bool
+  logLevel: LogLevel
 }
 
 module GlobalOptions =
 
-  let setup: ActionInput<bool> =
-    option "--setup"
+  let setup: ActionInput<bool option> =
+    optionMaybe<bool> "--setup"
     |> alias "-s"
     |> description
       "Run the setup command to install templates and other dependencies"
-    |> defaultValue true
+    |> defaultValue(Some true)
 
-  let ci: ActionInput<bool> =
-    option "--ci"
+  let ci: ActionInput<bool option> =
+    optionMaybe<bool> "--ci"
     |> description
       "Run the command in CI mode, which disables interactive prompts"
-    |> defaultValue false
+    |> defaultValue None
 
-  let skipPrompts: ActionInput<bool> =
-    option "--skip"
+  let skipPrompts: ActionInput<bool option> =
+    optionMaybe<bool> "--skip"
     |> description "Skip interactive prompts and use defaults"
-    |> defaultValue false
+    |> defaultValue None
 
-  let previewCommand: ActionInput<bool> =
-    option "--preview-command"
-    |> description "Allows running a command before its officia release"
-    |> defaultValue false
+  let previewCommand: ActionInput<bool option> =
+    optionMaybe<bool> "--preview-command"
+    |> description "Allows running a command before its official release"
+    |> defaultValue None
 
-  let bind parseResult = {
-    ci = ci.GetValue parseResult
-    skipPrompts = skipPrompts.GetValue parseResult
-    previewCommand = previewCommand.GetValue parseResult
-    setup = setup.GetValue parseResult
-  }
+  let logLevel: ActionInput<LogLevel> =
+    let inline parser(result: ArgumentResult) =
+      match result.Tokens |> Seq.tryHead with
+      | Some token ->
+        match token.Value with
+        | "Trace" -> LogLevel.Trace
+        | "Debug" -> LogLevel.Debug
+        | "Information" -> LogLevel.Information
+        | "Warning" -> LogLevel.Warning
+        | "Error" -> LogLevel.Error
+        | "Critical" -> LogLevel.Critical
+        | _ -> LogLevel.Information
+      | None -> LogLevel.Information
+
+    Option<LogLevel>(
+      "--log-level",
+      "-l",
+      Description = "The log level to use for the command",
+      Required = false,
+      CustomParser = parser,
+      DefaultValueFactory = (fun _ -> LogLevel.Information)
+    )
+      .AcceptOnlyFromAmong(
+        "Trace",
+        "Debug",
+        "Information",
+        "Warning",
+        "Error",
+        "Critical"
+      )
+    |> Input.ofOption
+
+  let bind parseResult =
+    let ci = ci.GetValue parseResult |> Option.defaultValue false
+
+    let skipPrompts =
+      skipPrompts.GetValue parseResult |> Option.defaultValue false
+
+    let previewCommand =
+      previewCommand.GetValue parseResult |> Option.defaultValue false
+
+    let setup = setup.GetValue parseResult |> Option.defaultValue true
+
+    {
+      ci = ci
+      skipPrompts = skipPrompts
+      previewCommand = previewCommand
+      setup = setup
+      logLevel = logLevel.GetValue parseResult
+    }
 
 
 
@@ -255,8 +297,7 @@ module BuildInputs =
 
 [<RequireQualifiedAccess>]
 module TestingInputs =
-  let browsers: ActionInput<Browser Set> =
-    PerlaOptions.Browsers |> ofOption
+  let browsers: ActionInput<Browser Set> = PerlaOptions.Browsers |> ofOption
 
   let files: ActionInput<string array> =
     option "--tests"
@@ -449,9 +490,7 @@ module Commands =
 
   let RemovePackage(container: AppContainer) =
 
-    let handleCommand
-      (ctx: ActionContext, package: string, _: string option)
-      =
+    let handleCommand(ctx: ActionContext, package: string, _: string option) =
       let options = { package = package }
       Handlers.runRemovePackage container options ctx.CancellationToken
 

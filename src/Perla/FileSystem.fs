@@ -101,6 +101,22 @@ type PerlaFsManagerArgs = {
 [<RequireQualifiedAccess>]
 module FileSystem =
 
+  let resolveEsbuildPath
+    (platform: PlatformOps, directories: PerlaDirectories)
+    (version: string<Semver>)
+    =
+    let bin = if platform.IsWindows() then "" else "bin"
+    let exec = if platform.IsWindows() then ".exe" else ""
+
+    directories.PerlaArtifactsRoot
+    |/ UMX.untag version
+    |/ "package"
+    |/ bin
+    |/ $"esbuild{exec}"
+    |> UMX.untag
+    |> Path.GetFullPath
+    |> UMX.tag<SystemPath>
+
   let GetManager(args: PerlaFsManagerArgs) : PerlaFsManager =
     { new PerlaFsManager with
         member _.CopyFiles(sourcePath, targetPath) =
@@ -118,16 +134,9 @@ module FileSystem =
             |> Array.Parallel.iter(fun file ->
               // Compute the relative path from the source root
               let relPath =
-                Path.GetRelativePath(
-                  sourcePath.FullName,
-                  file.FullName
-                )
+                Path.GetRelativePath(sourcePath.FullName, file.FullName)
 
-              let destPath =
-                Path.Combine(
-                  UMX.untag targetPath,
-                  relPath
-                )
+              let destPath = Path.Combine(UMX.untag targetPath, relPath)
 
               destPath
               |> Path.GetDirectoryName
@@ -181,7 +190,7 @@ module FileSystem =
 
           let reduction =
             AdaptiveReduction.fold Map.empty<string, string>
-            <| Map.fold (fun acc k v -> Map.add k v acc)
+            <| Map.fold(fun acc k v -> Map.add k v acc)
 
           let! dotEnvFilesContent =
             dotEnvFiles
@@ -265,20 +274,9 @@ module FileSystem =
           |> Array.Parallel.map(fun path -> path, File.ReadAllText path)
 
         member this.ResolveEsbuildPath() =
-          let bin = if args.PlatformOps.IsWindows() then "" else "bin"
-          let exec = if args.PlatformOps.IsWindows() then ".exe" else ""
-
-          let esbuildVersion =
-            this.PerlaConfiguration |> AVal.map _.esbuild.version |> AVal.force
-
-          args.PerlaDirectories.PerlaArtifactsRoot
-          |/ UMX.untag esbuildVersion
-          |/ "package"
-          |/ bin
-          |/ $"esbuild{exec}"
-          |> UMX.untag
-          |> Path.GetFullPath
-          |> UMX.tag<SystemPath>
+          resolveEsbuildPath
+            (args.PlatformOps, args.PerlaDirectories)
+            (this.PerlaConfiguration |> AVal.map _.esbuild.version |> AVal.force)
 
         member _.ResolveLiveReloadScript() = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
