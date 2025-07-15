@@ -71,7 +71,7 @@ type FakeJspmService
 
   interface JspmService with
     member _.Install(_, _) =
-      Task.FromResult(defaultArg installResponse defaultInstallResponse)
+      Task.FromResult(Success(defaultArg installResponse defaultInstallResponse))
 
     member _.Update(options, _) =
       // Simulate adding/updating packages in the import map
@@ -102,7 +102,7 @@ type FakeJspmService
             map = newMap
       }
 
-      Task.FromResult(defaultArg updateResponse resp)
+      Task.FromResult(Success(defaultArg updateResponse resp))
 
     member _.Uninstall(options, _) =
       // Simulate removing packages from the import map
@@ -129,7 +129,7 @@ type FakeJspmService
             map = newMap
       }
 
-      Task.FromResult(defaultArg uninstallResponse resp)
+      Task.FromResult(Success(defaultArg uninstallResponse resp))
 
     member _.Download(_, _, ?cancellationToken) =
       Task.FromResult(defaultArg downloadResponse defaultDownloadResponse)
@@ -171,12 +171,16 @@ module ImportMapTests =
     let service = createImportMapService(None)
 
     // Act
-    let! result = service.Install(packages)
+    let! resultKind = service.Install(packages)
 
     // Assert
-    Assert.Equal<int>(1, result.staticDeps.Length)
-    Assert.Equal<string>("react", result.staticDeps[0])
-    Assert.True(result.map.imports.ContainsKey("react"))
+    match resultKind with
+    | Success result ->
+      Assert.Equal<int>(1, result.staticDeps.Length)
+      Assert.Equal<string>("react", result.staticDeps[0])
+      Assert.True(result.map.imports.ContainsKey("react"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -192,12 +196,16 @@ module ImportMapTests =
     let service = createImportMapService(None)
 
     // Act
-    let! result = service.Update(importMap, packages)
+    let! resultKind = service.Update(importMap, packages)
 
     // Assert
-    Assert.Equal<int>(2, result.staticDeps.Length)
-    Assert.True(result.map.imports.ContainsKey("react"))
-    Assert.True(result.map.imports.ContainsKey("vue"))
+    match resultKind with
+    | Success result ->
+      Assert.Equal<int>(2, result.staticDeps.Length)
+      Assert.True(result.map.imports.ContainsKey("react"))
+      Assert.True(result.map.imports.ContainsKey("vue"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -217,12 +225,16 @@ module ImportMapTests =
     let service = createImportMapService(None)
 
     // Act
-    let! result = service.Uninstall(importMap, packages)
+    let! resultKind = service.Uninstall(importMap, packages)
 
     // Assert
-    Assert.Equal<int>(1, result.staticDeps.Length)
-    Assert.Equal<string>("react", result.staticDeps[0])
-    Assert.True(result.map.imports.ContainsKey("react"))
+    match resultKind with
+    | Success result ->
+      Assert.Equal<int>(1, result.staticDeps.Length)
+      Assert.Equal<string>("react", result.staticDeps[0])
+      Assert.True(result.map.imports.ContainsKey("react"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -522,10 +534,14 @@ module ImportMapTests =
     let packages = [ "solid-js/web" ]
     let service = createImportMapService(None)
     // Act
-    let! result = service.Uninstall(importMap, packages)
+    let! resultKind = service.Uninstall(importMap, packages)
     // Assert
-    Assert.True(result.map.imports.ContainsKey("solid-js"))
-    Assert.False(result.map.imports.ContainsKey("solid-js/web"))
+    match resultKind with
+    | Success result ->
+      Assert.True(result.map.imports.ContainsKey("solid-js"))
+      Assert.False(result.map.imports.ContainsKey("solid-js/web"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -545,10 +561,14 @@ module ImportMapTests =
     let packages = [ "solid-js/web" ]
     let service = createImportMapService(None)
     // Act
-    let! result = service.Update(importMap, packages)
+    let! resultKind = service.Update(importMap, packages)
     // Assert
-    Assert.True(result.map.imports.ContainsKey("solid-js"))
-    Assert.True(result.map.imports.ContainsKey("solid-js/web"))
+    match resultKind with
+    | Success result ->
+      Assert.True(result.map.imports.ContainsKey("solid-js"))
+      Assert.True(result.map.imports.ContainsKey("solid-js/web"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
