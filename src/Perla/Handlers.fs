@@ -519,7 +519,7 @@ module Handlers =
       Build.EntryPoints document
 
     // Step 9: Run esbuild or move/copy output
-    do!
+    let! esbuildOutput =
       container.BuildService.RunEsbuild(
         config,
         tempDir,
@@ -528,7 +528,7 @@ module Handlers =
         externals |> Seq.map UMX.untag |> Seq.toList
       )
 
-    container.BuildService.MoveOrCopyOutput(config, tempDir)
+    container.BuildService.MoveOrCopyOutput(config, tempDir, esbuildOutput)
 
     // Step 10: Write index.html
     let jsPaths = seq {
@@ -558,6 +558,16 @@ module Handlers =
           FileChangedEvents = container.VirtualFileSystem.FileChanges
         }
         token
+
+    // cleanup temporary directory
+    try
+      Directory.Delete(UMX.untag vfsOutputDir, true) |> ignore
+    with ex ->
+      container.Logger.LogWarning(
+        "Failed to delete temporary directory {dir}: {error}",
+        UMX.untag vfsOutputDir,
+        ex.Message
+      )
 
     return 0
   }

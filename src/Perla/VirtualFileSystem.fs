@@ -824,26 +824,38 @@ module VirtualFs =
 
           Directory.CreateDirectory outputDir |> ignore
 
-          let mutable fileCount = 0
-
-          for KeyValue(serverUrl, entry) in files do
-            let relativePath = (UMX.untag serverUrl).TrimStart('/')
+          // Local function to copy a single entry
+          let copyEntry(KeyValue(serverUrl: string<ServerUrl>, entry)) =
+            let serverUrl = UMX.untag serverUrl
+            let relativePath = serverUrl.TrimStart('/')
             let targetPath = Path.Combine(outputDir, relativePath)
-            let targetDir = Path.GetDirectoryName(targetPath) |> nonNull
+            let targetDir = Path.GetDirectoryName targetPath |> nonNull
 
-            Directory.CreateDirectory(targetDir) |> ignore
+            Directory.CreateDirectory targetDir |> ignore
 
             match entry.kind with
             | TextFile content ->
-              File.WriteAllText(targetPath, content.content)
-              fileCount <- fileCount + 1
+              let fileSource = UMX.untag content.source
+
+              if fileSource.Contains("node_modules") then
+                File.Copy(fileSource, targetPath, true)
+              else
+                File.WriteAllText(targetPath, content.content)
             | BinaryFile info ->
               File.Copy(UMX.untag info.source, targetPath, true)
-              fileCount <- fileCount + 1
+
+          // Merge all entries into a single array
+          let allEntries = [|
+            yield! files |> Seq.toArray
+            yield! nodeModulesFiles |> Seq.toArray
+          |]
+
+          // Copy all files in parallel
+          allEntries |> Array.Parallel.iter copyEntry
 
           args.Logger.LogInformation(
             "Successfully exported {FileCount} files to {OutputDir}",
-            fileCount,
+            allEntries.Length,
             outputDir
           )
 

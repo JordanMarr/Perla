@@ -63,10 +63,13 @@ type BuildService =
     cssPaths: seq<string<Perla.Units.ServerUrl>> *
     jsBundleEntrypoints: seq<string<Perla.Units.ServerUrl>> *
     externals: string list ->
-      CancellableTask<unit>
+      CancellableTask<string<SystemPath>>
 
   abstract MoveOrCopyOutput:
-    config: PerlaConfig aval * tempDir: string<SystemPath> -> unit
+    config: PerlaConfig aval *
+    tempDir: string<SystemPath> *
+    esbuildOutput: string<SystemPath> ->
+      unit
 
   abstract WriteIndex:
     config: PerlaConfig aval *

@@ -53,10 +53,13 @@ type BuildService =
     cssPaths: seq<string<ServerUrl>> *
     jsBundleEntrypoints: seq<string<ServerUrl>> *
     externals: string list ->
-      CancellableTask<unit>
+      CancellableTask<string<SystemPath>>
 
   abstract MoveOrCopyOutput:
-    config: PerlaConfig aval * tempDir: string<SystemPath> -> unit
+    config: PerlaConfig aval *
+    tempDir: string<SystemPath> *
+    esbuildOutput: string<SystemPath> ->
+      unit
 
   abstract WriteIndex:
     config: PerlaConfig aval *
@@ -273,75 +276,74 @@ module BuildService =
           =
           cancellableTask {
             let config = config |> AVal.force
+            let esbuildOutput = Path.Combine(UMX.untag tempDir, "esbuild")
+
+            Directory.CreateDirectory esbuildOutput |> ignore
 
             let isEsbuildPluginPresent =
               config.plugins |> List.contains Constants.PerlaEsbuildPluginName
 
-            if isEsbuildPluginPresent then
-              for entrypoint in jsBundleEntrypoints do
-                do!
-                  args.EsbuildService.ProcessJS(
-                    entrypoint,
-                    tempDir,
-                    config.build.outDir,
-                    {
-                      config.esbuild with
-                          externals =
-                            externals @ (Build.Externals config |> Seq.toList)
-                    }
-                  )
-
-              for entrypoint in cssPaths do
-                do!
-                  args.EsbuildService.ProcessCss(
-                    entrypoint,
-                    tempDir,
-                    config.build.outDir,
-                    config.esbuild
-                  )
-            // Do NOT call CopyGlobs here. It is now handled in MoveOrCopyOutput.
+            if not isEsbuildPluginPresent then
+              return UMX.tag esbuildOutput
             else
-              // esbuild didn't run for our sources so we will just move them to the outdir
-              let outDir = DirectoryInfo(UMX.untag config.build.outDir)
 
-              try
-                Directory.Move(UMX.untag tempDir, outDir.FullName)
-              with ex ->
-                args.Logger.LogWarning(
-                  "Failed to move temporary directory {tempDir} to output directory {outDir}: {error}",
-                  tempDir,
+            for entrypoint in jsBundleEntrypoints do
+              do!
+                args.EsbuildService.ProcessJS(
+                  entrypoint,
+                  UMX.tag esbuildOutput,
                   config.build.outDir,
-                  ex.Message
+                  {
+                    config.esbuild with
+                        externals =
+                          externals @ (Build.Externals config |> Seq.toList)
+                  }
                 )
+
+            for entrypoint in cssPaths do
+              do!
+                args.EsbuildService.ProcessCss(
+                  entrypoint,
+                  UMX.tag esbuildOutput,
+                  config.build.outDir,
+                  config.esbuild
+                )
+
+            return UMX.tag esbuildOutput
           }
 
-        member _.MoveOrCopyOutput(config, tempDir) =
+        member _.MoveOrCopyOutput(config, tempDir, esbuildOutputPath) =
           let config = config |> AVal.force
+          let outDir = config.build.outDir
 
           let isEsbuildPluginPresent =
             config.plugins |> List.contains Constants.PerlaEsbuildPluginName
 
           if isEsbuildPluginPresent then
-            // Always use CopyGlobs for copying output files when esbuild is present.
+            if config.useLocalPkgs then
+              args.Logger.LogDebug(
+                "Copying all files from esbuild output to outDir (esbuild present, useLocalPkgs true)"
+              )
+
+              args.FsManager.CopyFiles(
+                DirectoryInfo(UMX.untag esbuildOutputPath),
+                outDir
+              )
+            else
+              args.Logger.LogDebug(
+                "esbuild present, useLocalPkgs false: skipping full esbuild output copy (only globs will be copied)"
+              )
+
+              () // Only CopyGlobs below
+          else
             args.Logger.LogDebug(
-              "Copying output files to outDir using CopyGlobs (esbuild present)"
+              "Copying all files from tempDir to outDir (esbuild not present)"
             )
 
-            args.FsManager.CopyGlobs config.build
-          else
-            // Fallback: try to move, else log warning (no custom copy logic, rely on move only)
-            let outDir = DirectoryInfo(UMX.untag config.build.outDir)
-            let tempDirInfo = DirectoryInfo(UMX.untag tempDir)
+            args.FsManager.CopyFiles(DirectoryInfo(UMX.untag tempDir), outDir)
 
-            try
-              Directory.Move(tempDirInfo.FullName, outDir.FullName)
-            with ex ->
-              args.Logger.LogWarning(
-                "Failed to move temporary directory {tempDir} to output directory {outDir}: {error}. Manual copy may be required.",
-                tempDir,
-                config.build.outDir,
-                ex.Message
-              )
+          // globs are always copied
+          args.FsManager.CopyGlobs config.build
 
         member _.WriteIndex(config, document, map, jsPaths, cssPaths) = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
