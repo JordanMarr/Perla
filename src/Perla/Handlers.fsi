@@ -30,7 +30,7 @@ type DependencyOptions = { packages: string Set }
 type ListPackagesOptions = { format: ListFormat }
 
 type InstallOptions = {
-  offline: bool
+  offline: bool option
   source: PkgManager.DownloadProvider voption
 }
 

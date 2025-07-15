@@ -53,8 +53,8 @@ type ListTemplatesOptions = { format: ListFormat }
 type DependencyOptions = { packages: string Set }
 
 type InstallOptions = {
-  offline: bool
-  source: Perla.PkgManager.DownloadProvider voption
+  offline: bool option
+  source: PkgManager.DownloadProvider voption
 }
 
 type ListPackagesOptions = { format: ListFormat }
@@ -1148,16 +1148,19 @@ module Handlers =
         "You can add dependencies with 'perla add <package>'."
       )
 
-      let useLocalPkgs = config |> AVal.map _.useLocalPkgs |> AVal.force
+      let configUseLocalPkgs = config |> AVal.map _.useLocalPkgs |> AVal.force
       let provider = config |> AVal.map _.provider |> AVal.force
 
       let changes = ResizeArray()
 
-      if options.offline <> useLocalPkgs then
-        let msg = if options.offline then "Enabling" else "Disabling"
+      let useLocalPkgs =
+        options.offline |> Option.defaultValue configUseLocalPkgs
+
+      if useLocalPkgs <> configUseLocalPkgs then
+        let msg = if useLocalPkgs then "Enabling" else "Disabling"
         logger.LogInformation($"{msg} local packages.")
 
-        if options.offline then
+        if useLocalPkgs then
           logger.LogInformation(
             "Perla will generate a local node_modules directory and the import map will point at the dependencies there."
           )
@@ -1166,7 +1169,7 @@ module Handlers =
             "Perla will use an import map that points to the provider's CDN."
           )
 
-        changes.Add(PerlaConfig.PerlaWritableField.UseLocalPkgs options.offline)
+        changes.Add(PerlaConfig.PerlaWritableField.UseLocalPkgs useLocalPkgs)
 
       if options.source.IsSome && options.source.Value <> provider then
         logger.LogInformation(
@@ -1199,6 +1202,15 @@ module Handlers =
         match options.source with
         | ValueSome source -> source
         | ValueNone -> config |> AVal.map _.provider |> AVal.force
+
+      let configUseLocalPkgs =
+        container.Configuration.PerlaConfig
+        |> AVal.map _.useLocalPkgs
+        |> AVal.force
+
+      let useLocalPkgs =
+        options.offline |> Option.defaultValue configUseLocalPkgs
+
 
       let! map =
         logger.Spinner(
@@ -1238,7 +1250,7 @@ module Handlers =
         |> PerlaConfig.PerlaWritableField.Dependencies
 
       let! map = cancellableTask {
-        if options.offline then
+        if useLocalPkgs then
           logger.LogWarning(
             "Offline mode selected, we'll proceed to download the dependencies as local sources."
           )
@@ -1259,7 +1271,9 @@ module Handlers =
 
       let configUpdates = [
         packageUpdates
-        PerlaConfig.PerlaWritableField.UseLocalPkgs options.offline
+        if useLocalPkgs <> configUseLocalPkgs then
+          PerlaConfig.PerlaWritableField.UseLocalPkgs useLocalPkgs
+
         match options.source with
         | ValueSome source -> PerlaConfig.PerlaWritableField.Provider source
         | ValueNone -> ()

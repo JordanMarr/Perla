@@ -518,10 +518,7 @@ module Commands =
         offline: bool option,
         source: PkgManager.DownloadProvider voption
       ) =
-      let options = {
-        offline = defaultArg offline false
-        source = source
-      }
+      let options = { offline = offline; source = source }
 
       Handlers.runInstall container options ctx.CancellationToken
 
