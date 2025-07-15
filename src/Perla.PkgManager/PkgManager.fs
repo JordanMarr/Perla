@@ -532,3 +532,8 @@ module PkgManager =
           | Error _ -> None
         else
           None)
+
+    member this.FindDependencies(packages: string seq) =
+      packages
+      |> Seq.choose this.FindDependency
+      |> Set

@@ -50,12 +50,7 @@ type SetupOptions = {
 
 type ListTemplatesOptions = { format: ListFormat }
 
-type AddPackageOptions = {
-  package: string
-  version: string option
-}
-
-type RemovePackageOptions = { package: string }
+type DependencyOptions = { packages: string Set }
 
 type InstallOptions = {
   offline: bool
@@ -927,7 +922,7 @@ module Handlers =
     return 0
   }
 
-  let runAddPackage (container: AppContainer) (options: AddPackageOptions) = cancellableTask {
+  let runAddPackage (container: AppContainer) (options: DependencyOptions) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
     let pkgManager = container.PkgManager
     let logger = container.Logger
@@ -935,10 +930,15 @@ module Handlers =
     let config = container.Configuration.PerlaConfig |> AVal.force
     let importMap = container.FsManager.ResolveImportMap |> AVal.force
 
-    let basePkg, fullImport, version = options.package |> parsePackageName
-    let version = version |> Option.orElseWith(fun _ -> options.version)
+    // Process each package in the set
+    let packageInfos =
+      options.packages
+      |> Set.map(fun pkg ->
+        let basePkg, fullImport, version = parsePackageName pkg
+        (basePkg, fullImport, version))
 
-    let packages =
+    // Start with existing packages
+    let initialPackages =
       if config.useLocalPkgs then
         config.dependencies
         |> Set.map(fun { package = package; version = version } ->
@@ -947,24 +947,31 @@ module Handlers =
         // Otherwise, we start with an empty set of packages
         importMap.ExtractDependencies()
 
-    // Remove any existing entries for this full import or base package
+    // Process each package to add
     let packages =
-      packages
-      |> Set.filter(fun (name, _) -> name <> fullImport && name <> basePkg)
-      // Add both the base package and the full import (if different)
-      |> fun pkgs ->
-          let pkgs = pkgs |> Set.add(basePkg, version)
+      packageInfos
+      |> Set.fold
+        (fun pkgs (basePkg, fullImport, version) ->
+          // Remove any existing entries for this full import or base package
+          pkgs
+          |> Set.filter(fun (name, _) -> name <> fullImport && name <> basePkg)
+          // Add both the base package and the full import (if different)
+          |> fun filteredPkgs ->
+              let updatedPkgs = filteredPkgs |> Set.add(basePkg, version)
 
-          if fullImport <> basePkg then
-            Set.add (fullImport, version) pkgs
-          else
-            pkgs
+              if fullImport <> basePkg then
+                Set.add (fullImport, version) updatedPkgs
+              else
+                updatedPkgs)
+        initialPackages
 
-    logger.LogInformation(
-      "Adding package '{name}' with version '{version}'",
-      fullImport,
-      version
-    )
+    // Log the packages being added
+    for basePkg, fullImport, version in packageInfos do
+      logger.LogInformation(
+        "Adding package '{name}' with version '{version}'",
+        fullImport,
+        version
+      )
 
     let provider =
       match config.provider with
@@ -1027,87 +1034,92 @@ module Handlers =
 
     do! container.FsManager.SavePerlaConfig configUpdates
 
-    logger.LogInformation(
-      "Package '{name}' installed successfully.",
-      fullImport
-    )
+    logger.LogInformation("Packages added successfully.")
 
     return 0
   }
 
-  let runRemovePackage
-    (container: AppContainer)
-    (options: RemovePackageOptions)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let config = container.Configuration.PerlaConfig |> AVal.force
-      let logger = container.Logger
-      let map = container.FsManager.ResolveImportMap |> AVal.force
+  let runRemovePackage (container: AppContainer) (options: DependencyOptions) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let config = container.Configuration.PerlaConfig |> AVal.force
+    let logger = container.Logger
+    let map = container.FsManager.ResolveImportMap |> AVal.force
 
-      match map.FindDependency options.package with
-      | None ->
-        logger.LogError(
-          "Package '{name}' not found in the import map.",
-          options.package
+    // Find all packages that exist in the import map
+    let packagesToRemove =
+      options.packages
+      |> Seq.choose(fun pkg ->
+        match map.FindDependency pkg with
+        | None ->
+          logger.LogWarning(
+            "Package '{name}' not found in the import map.",
+            pkg
+          )
+
+          None
+        | Some(name, _) -> Some name)
+      |> Seq.toList
+
+    if List.isEmpty packagesToRemove then
+      logger.LogError("No valid packages found to remove.")
+      return 1
+    else
+      let packageNames = String.concat ", " packagesToRemove
+
+      let! uninstallResponse =
+        logger.Spinner(
+          $"Uninstalling packages: {packageNames}...",
+          container.PkgManager.Uninstall(
+            map,
+            packagesToRemove,
+            [
+              DefaultProvider(
+                match config.provider with
+                | JsDelivr -> Provider.JsDelivr
+                | Unpkg -> Provider.Unpkg
+                | JspmIo -> Provider.JspmIo
+              )
+            ],
+            token
+          )
         )
 
-        return 1
-      | Some(name, _) ->
-        let! uninstallResponse =
+      let packageUpdates =
+        // extract the dependencies before we save the offline map
+        uninstallResponse.map.ExtractDependencies()
+        |> Set.map(fun (name, version) ->
+          let dep: PkgDependency = {
+            package = name
+            // dependencies from a GeneratorResponse have embedded versions even if they are not specified
+            version = version.Value |> UMX.tag<Semver>
+          }
+
+          dep)
+        |> PerlaConfig.PerlaWritableField.Dependencies
+
+      let configUpdates = ResizeArray()
+      configUpdates.Add packageUpdates
+
+      if config.useLocalPkgs then
+        let! result =
           logger.Spinner(
-            $"Uninstalling package '{name}'...",
-            container.PkgManager.Uninstall(
-              map,
-              [ name ],
-              [
-                DefaultProvider(
-                  match config.provider with
-                  | JsDelivr -> Provider.JsDelivr
-                  | Unpkg -> Provider.Unpkg
-                  | JspmIo -> Provider.JspmIo
-                )
-              ],
+            "Consolidating local packages...",
+            container.PkgManager.GoOffline(
+              uninstallResponse.map,
+              [ Provider config.provider ],
               token
             )
           )
 
-        let packageUpdates =
-          // extract the dependencies before we save the offline map
-          uninstallResponse.map.ExtractDependencies()
-          |> Set.map(fun (name, version) ->
-            let dep: PkgDependency = {
-              package = name
-              // dependencies from a GeneratorResponse have embedded versions even if they are not specified
-              version = version.Value |> UMX.tag<Semver>
-            }
+        do! container.FsManager.SaveImportMap result
+      else
+        do! container.FsManager.SaveImportMap uninstallResponse.map
 
-            dep)
-          |> PerlaConfig.PerlaWritableField.Dependencies
+      do! container.FsManager.SavePerlaConfig configUpdates
+      logger.LogInformation("Packages installed successfully.")
+      return 0
 
-        let configUpdates = ResizeArray()
-        configUpdates.Add packageUpdates
-
-        if config.useLocalPkgs then
-          let! result =
-            logger.Spinner(
-              "Consolidating local packages...",
-              container.PkgManager.GoOffline(
-                uninstallResponse.map,
-                [ Provider config.provider ],
-                token
-              )
-            )
-
-          do! container.FsManager.SaveImportMap result
-        else
-          do! container.FsManager.SaveImportMap uninstallResponse.map
-
-        do! container.FsManager.SavePerlaConfig configUpdates
-        logger.LogInformation("Packages installed successfully.")
-        return 0
-
-    }
+  }
 
   let runInstall (container: AppContainer) (options: InstallOptions) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()

@@ -38,7 +38,7 @@ module SetupInputs =
 
 [<RequireQualifiedAccess>]
 module PackageInputs =
-  val package: ActionInput<string>
+  val packages: ActionInput<string Set>
   val version: ActionInput<string option>
   val alias: ActionInput<string option>
   val showAsNpm: ActionInput<bool option>

@@ -411,11 +411,75 @@ module ImportMapTests =
       imports = Map.empty
       scopes = Map.empty
       integrity = Map.empty
-    }
-
-    // Act & Assert
+    }    // Act & Assert
     Assert.True(importMap.FindDependency("react").IsNone)
     Assert.True(importMap.FindDependency("").IsNone)
+
+  [<Fact>]
+  let ``FindDependencies should return multiple found dependencies``() =
+    // Arrange
+    let importMap: ImportMap = {
+      imports =
+        Map.ofList [
+          ("react", "https://ga.jspm.io/npm:react@18.2.0/index.js")
+          ("react-dom", "https://ga.jspm.io/npm:react-dom@18.2.0/index.js")
+          ("@babel/core", "https://ga.jspm.io/npm:@babel/core@7.20.0/lib/index.js")
+          ("lodash", "https://ga.jspm.io/npm:lodash@4.17.21/lodash.js")
+        ]
+      scopes = Map.empty
+      integrity = Map.empty
+    }
+
+    // Act
+    let packages = ["react"; "lodash"; "@babel/core"; "nonexistent"]
+    let result = importMap.FindDependencies(packages)
+
+    // Assert
+    Assert.Equal(3, result.Count) // Should find 3 out of 4 packages
+    Assert.Contains(("react", Some "18.2.0"), result)
+    Assert.Contains(("lodash", Some "4.17.21"), result)
+    Assert.Contains(("@babel/core", Some "7.20.0"), result)
+    Assert.DoesNotContain(("nonexistent", None), result)
+
+  [<Fact>]
+  let ``FindDependencies should return empty set for empty input``() =
+    // Arrange
+    let importMap: ImportMap = {
+      imports =
+        Map.ofList [
+          ("react", "https://ga.jspm.io/npm:react@18.2.0/index.js")
+        ]
+      scopes = Map.empty
+      integrity = Map.empty
+    }
+
+    // Act
+    let result = importMap.FindDependencies([])
+
+    // Assert
+    Assert.Equal(0, result.Count)
+
+  [<Fact>]
+  let ``FindDependencies should handle case insensitive matching``() =
+    // Arrange
+    let importMap: ImportMap = {
+      imports =
+        Map.ofList [
+          ("React", "https://ga.jspm.io/npm:react@18.2.0/index.js")
+          ("LODASH", "https://ga.jspm.io/npm:lodash@4.17.21/lodash.js")
+        ]
+      scopes = Map.empty
+      integrity = Map.empty
+    }
+
+    // Act
+    let packages = ["react"; "lodash"]
+    let result = importMap.FindDependencies(packages)
+
+    // Assert
+    Assert.Equal(2, result.Count)
+    Assert.Contains(("React", Some "18.2.0"), result) // Should preserve original case
+    Assert.Contains(("LODASH", Some "4.17.21"), result)
 
   [<Fact>]
   let ``ExtractDependencies should handle deep imports and return correct format``

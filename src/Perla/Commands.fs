@@ -220,8 +220,18 @@ module PackageInputs =
     |> description "Install packages without network access"
 
 
-  let package: ActionInput<string> =
-    argument "package" |> description "Name of the JS Package"
+  let packages: ActionInput<string Set> =
+    let parser(result: ArgumentResult) =
+      result.Tokens |> Seq.map _.Value |> Set.ofSeq
+
+    Argument<string Set>(
+      "packages",
+      CustomParser = parser,
+      Arity = ArgumentArity.OneOrMore,
+      Description = "set of packages to add as dependencies"
+    )
+    |> Input.ofArgument
+
 
   let version: ActionInput<string option> =
     optionMaybe "--version"
@@ -490,14 +500,14 @@ module Commands =
 
   let RemovePackage(container: AppContainer) =
 
-    let handleCommand(ctx: ActionContext, package: string, _: string option) =
-      let options = { package = package }
+    let handleCommand(ctx: ActionContext, package: string Set) =
+      let options = { packages = package }
       Handlers.runRemovePackage container options ctx.CancellationToken
 
     command "remove" {
       description "Removes a package from the project dependencies"
 
-      inputs(context, PackageInputs.package, PackageInputs.alias)
+      inputs(context, PackageInputs.packages)
       setAction handleCommand
     }
 
@@ -523,17 +533,15 @@ module Commands =
 
   let AddPackage(container: AppContainer) =
 
-    let handleCommand
-      (ctx: ActionContext, package: string, version: string option)
-      =
-      let options = { package = package; version = version }
+    let handleCommand(ctx: ActionContext, packages: string Set) =
+      let options = { packages = packages }
 
       Handlers.runAddPackage container options ctx.CancellationToken
 
     command "add" {
       description "Adds a package to the project dependencies"
 
-      inputs(context, PackageInputs.package, PackageInputs.version)
+      inputs(context, PackageInputs.packages)
 
       setAction handleCommand
     }
