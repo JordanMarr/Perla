@@ -4,6 +4,23 @@ open Xunit
 open Perla
 open Perla.Units
 open FSharp.UMX
+open System.IO
+
+let testRootDir =
+  // Use a platform-correct absolute path for the test root
+  let baseDir =
+    if
+      System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+        System.Runtime.InteropServices.OSPlatform.Windows
+      )
+    then
+      "C:\\perla-test-root"
+    else
+      "/tmp/perla-test-root"
+
+  Path.GetFullPath(baseDir)
+
+let testFile fileName = Path.Combine(testRootDir, fileName)
 
 [<Fact>]
 let ``replaceImports: import { Button } from '/components/my-button.js'``() =
@@ -11,16 +28,15 @@ let ``replaceImports: import { Button } from '/components/my-button.js'``() =
   let prefix = "/components/"
   let replacement = "./components/"
 
-  let expected =
-    "import { Button } from './perla-test-root/components/my-button.js'"
+  let expected = $"import {{ Button }} from './components/my-button.js'"
 
   let paths = Map.ofList [ (UMX.tag prefix, UMX.tag replacement) ]
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -31,16 +47,15 @@ let ``replaceImports: import { Button } from at_src_services_my_service_js``() =
   let prefix = "@src/"
   let replacement = "./src/"
 
-  let expected =
-    "import { Button } from \"./perla-test-root/src/services/my-service.js\""
+  let expected = "import { Button } from \"./src/services/my-service.js\""
 
   let paths = Map.ofList [ (UMX.tag prefix, UMX.tag replacement) ]
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -50,14 +65,14 @@ let ``replaceImports: import x from '/components/other.js'``() =
   let input = "import x from '/components/other.js'"
   let prefix = "/components/"
   let replacement = "./components/"
-  let expected = "import x from './perla-test-root/components/other.js'"
+  let expected = "import x from './components/other.js'"
   let paths = Map.ofList [ (UMX.tag prefix, UMX.tag replacement) ]
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -135,14 +150,14 @@ let ``replaceImports: import('/components/dyn.js')``() =
   let input = "import('/components/dyn.js')"
   let prefix = "/components/"
   let replacement = "./components/"
-  let expected = "import('./perla-test-root/components/dyn.js')"
+  let expected = "import('./components/dyn.js')"
   let paths = Map.ofList [ (UMX.tag prefix, UMX.tag replacement) ]
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -155,16 +170,15 @@ let ``replaceImports: import('/components/dyn.js', { with: { type: 'json' } })``
   let prefix = "/components/"
   let replacement = "./components/"
 
-  let expected =
-    "import('./perla-test-root/components/dyn.js', { with: { type: 'json' } })"
+  let expected = "import('./components/dyn.js', { with: { type: 'json' } })"
 
   let paths = Map.ofList [ (UMX.tag prefix, UMX.tag replacement) ]
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -180,8 +194,8 @@ let ``replaceImports: import(`/components/${var}`) (should not replace)``() =
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -197,8 +211,8 @@ let ``replaceImports: import('/not-matching.js') (should not replace)``() =
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -214,13 +228,13 @@ let ``replaceImports prefers longer prefix match``() =
     ]
     |> Map.ofList
 
-  let expected = "import { X } from './perla-test-root/src/longer/path/file.js'"
+  let expected = "import { X } from './src/longer/path/file.js'"
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -236,8 +250,8 @@ let ``replaceImports does not replace dynamic imports with expressions``
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(input, actual)
@@ -255,13 +269,13 @@ let ``replaceImports: replaces multiple different imports in the same file``() =
     |> Map.ofList
 
   let expected =
-    "import { Button } from \"./perla-test-root/components/my-button.js\"\nimport { Button } from \"./perla-test-root/src/services/my-service.js\""
+    "import { Button } from \"./components/my-button.js\"\nimport { Button } from \"./src/services/my-service.js\""
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -279,13 +293,13 @@ let ``replaceImports: replaces multiple different imports in a single line``() =
     |> Map.ofList
 
   let expected =
-    "import { Button } from \"./perla-test-root/components/my-button.js\";import { Button } from \"./perla-test-root/src/services/my-service.js\""
+    "import { Button } from \"./components/my-button.js\";import { Button } from \"./src/services/my-service.js\""
 
   let actual =
     ImportMaps.replaceImports
       paths
-      "C:\\dummy.js"
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile "dummy.js")
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -310,8 +324,8 @@ let ``replaceImports: deeply nested import path to top-level resolution url``
   let actual =
     ImportMaps.replaceImports
       paths
-      importingFile
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile importingFile)
+      (UMX.tag<SystemPath> testRootDir)
       input
 
   Assert.Equal(expected, actual)
@@ -326,7 +340,7 @@ let ``replaceImports: deeply nested import path to top-level resolution url (sin
   let expected = "import x from '../../../../components/foo.js'"
   let paths = Map.ofList [ (UMX.tag prefix, UMX.tag replacement) ]
   let importingFile = "src/feature1/deep/nested/code.js"
-  let sourcesRoot = UMX.tag<SystemPath> "C:\\perla-test-root"
+  let sourcesRoot = UMX.tag<SystemPath> testRootDir
 
   let actual = ImportMaps.replaceImports paths importingFile sourcesRoot input
 
@@ -349,8 +363,8 @@ let ``replaceImports: deeply nested file with multiple import map entries``() =
   let actual1 =
     ImportMaps.replaceImports
       paths
-      importingFile1
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile importingFile1)
+      (UMX.tag<SystemPath> testRootDir)
       input1
 
   Assert.Equal(expected1, actual1)
@@ -363,8 +377,8 @@ let ``replaceImports: deeply nested file with multiple import map entries``() =
   let actual2 =
     ImportMaps.replaceImports
       paths
-      importingFile2
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile importingFile2)
+      (UMX.tag<SystemPath> testRootDir)
       input2
 
   Assert.Equal(expected2, actual2)
@@ -381,8 +395,8 @@ let ``replaceImports: deeply nested file with multiple import map entries``() =
   let actual3 =
     ImportMaps.replaceImports
       paths
-      importingFile3
-      (UMX.tag<SystemPath> "C:\\perla-test-root")
+      (testFile importingFile3)
+      (UMX.tag<SystemPath> testRootDir)
       input3
 
   Assert.Equal(expected3, actual3)

@@ -291,7 +291,7 @@ module BuildService =
               do!
                 args.EsbuildService.ProcessJS(
                   entrypoint,
-                  UMX.tag esbuildOutput,
+                  tempDir,
                   config.build.outDir,
                   {
                     config.esbuild with

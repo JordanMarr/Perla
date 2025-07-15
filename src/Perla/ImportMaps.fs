@@ -91,7 +91,7 @@ module ImportMaps =
           replacementStr
         else
           replacementStr
-      // Ensure importingDir is absolute, fallback to sourcesRoot if empty
+      // Compute absolute paths
       let importingDirAbs =
         let dir =
           if System.String.IsNullOrWhiteSpace(importingDir) then
@@ -104,10 +104,9 @@ module ImportMaps =
         System.IO.Path.GetFullPath(dir)
 
       let targetAbs =
-        if System.IO.Path.IsPathRooted(target) then
-          System.IO.Path.GetFullPath(target)
-        else
-          System.IO.Path.GetFullPath(target, UMX.untag sourcesRoot)
+        System.IO.Path.GetFullPath(
+          System.IO.Path.Combine(UMX.untag sourcesRoot, target)
+        )
 
       let rel =
         System.IO.Path

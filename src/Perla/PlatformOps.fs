@@ -404,15 +404,21 @@ module PlatformOps =
                 .WithStandardOutputPipe(
                   PipeTarget.ToDelegate logger.LogInformation
                 )
-                .WithStandardErrorPipe(
-                  PipeTarget.ToDelegate logger.LogInformation
-                )
+                .WithEnvironmentVariables(fun envvars ->
+                  envvars.Set(
+                    "NODE_PATH",
+                    Path.Combine(UMX.untag workingDir, "node_modules")
+                  )
+                  |> ignore)
+                .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
                 .WithArguments(fun argsBuilder ->
-                  argsBuilder.Add(entrypoint)
+                  argsBuilder.Add entrypoint
                   |> buildEsbuildConfig config
                   |> _.Add($"--outdir={outdir}")
                   |> buildEsbuildFileLoaders config.fileLoaders
                   |> ignore)
+                .WithValidation
+                CommandResultValidation.None
 
             let! _ = command.ExecuteAsync(cancellationToken = token)
             return ()

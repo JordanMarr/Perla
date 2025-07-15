@@ -490,7 +490,8 @@ module Handlers =
     do! container.BuildService.LoadVfs(config)
 
     // Step 6: Copy VFS to disk
-    let! tempDir = container.BuildService.CopyVfsToDisk(vfsOutputDir)
+    let! esbuildTmpDir = container.BuildService.CopyVfsToDisk(vfsOutputDir)
+    let tempDir = vfsOutputDir
 
     container.Logger.LogInformation(
       "Copying Processed files to {tempDirectory}",
