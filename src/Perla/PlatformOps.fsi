@@ -52,7 +52,6 @@ type PlatformOps =
     sourceCode: string *
     loader: string option *
     target: string *
-    minify: bool *
     jsxAutomatic: bool *
     jsxImportSource: string option *
     tsconfig: string option ->

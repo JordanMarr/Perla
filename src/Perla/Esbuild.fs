@@ -73,7 +73,6 @@ module Esbuild =
           source,
           loaderStr,
           config.ecmaVersion,
-          config.minify,
           config.jsxAutomatic,
           config.jsxImportSource,
           tsconfig

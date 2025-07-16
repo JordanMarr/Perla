@@ -88,7 +88,7 @@ type FakePlatformOps
     member _.StreamFable(_, _, _, _) = AsyncSeq.empty |> AsyncSeq.toAsyncEnum
     member _.IsFableAvailable() = cancellableTask { return fableAvailable }
 
-    member _.RunEsbuildTransform(_, _, _, _, _, _, _, _) = cancellableTask {
+    member _.RunEsbuildTransform(_, _, _, _, _, _, _) = cancellableTask {
       return ""
     }
 
@@ -777,7 +777,7 @@ PERLA_DEBUG=true"""
   Assert.Contains("export const DEBUG = \"true\"", savedContent)
 
 [<Fact>]
-let ``EmitEnvFile should create empty file when no environment variables exist``
+let ``EmitEnvFile should not create empty file when no environment variables exist``
   ()
   =
   use tempDir = TestHelpers.createTempDir()
@@ -802,20 +802,14 @@ let ``EmitEnvFile should create empty file when no environment variables exist``
         build.outDir = tempDir.Path
   }
 
+  let envvars = fsManager.DotEnvContents |> AVal.force
+
   // Emit the env file
   fsManager.EmitEnvFile(testConfig)
 
-  // Verify the file was created
+  // Verify the file was not created if the map is empty
   let expectedPath = Path.Combine(UMX.untag tempDir.Path, "env.js")
-  Assert.True(File.Exists(expectedPath))
-
-  // Verify the content is empty (just a newline)
-  let savedContent = File.ReadAllText(expectedPath)
-  Assert.NotNull(savedContent)
-
-  Assert.True(
-    String.IsNullOrWhiteSpace(savedContent) || savedContent.Trim() = ""
-  )
+  Assert.False(Map.isEmpty envvars && File.Exists(expectedPath))
 
 [<Fact>]
 let ``EmitEnvFile should use custom tmpPath when provided``() =

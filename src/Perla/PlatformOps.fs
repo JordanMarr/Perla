@@ -60,7 +60,6 @@ type PlatformOps =
     sourceCode: string *
     loader: string option *
     target: string *
-    minify: bool *
     jsxAutomatic: bool *
     jsxImportSource: string option *
     tsconfig: string option ->
@@ -133,7 +132,6 @@ module PlatformOps =
 
   let private buildEsbuildArguments
     (target: string)
-    (minify: bool)
     (jsxAutomatic: bool)
     (jsxImportSource: string option)
     (tsconfig: string option)
@@ -142,7 +140,6 @@ module PlatformOps =
     fun (args: Builders.ArgumentsBuilder) ->
       let args = args.Add $"--target={target}"
       let args = args.Add "--format=esm"
-      let args = if minify then args.Add "--minify" else args
       let args = if jsxAutomatic then args.Add "--jsx=automatic" else args
 
       let args =
@@ -336,7 +333,6 @@ module PlatformOps =
             sourceCode,
             loader,
             target,
-            minify,
             jsxAutomatic,
             jsxImportSource,
             tsconfig
@@ -354,7 +350,6 @@ module PlatformOps =
                 .WithArguments(fun args ->
                   buildEsbuildArguments
                     target
-                    minify
                     jsxAutomatic
                     jsxImportSource
                     tsconfig

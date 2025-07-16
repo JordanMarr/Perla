@@ -299,35 +299,38 @@ module SerilogExtensions =
 
 [<RequireQualifiedAccess>]
 module PerlaSeriLogger =
+  type LoggerConfiguration with
+    member config.SetLevel(logLevel: Microsoft.Extensions.Logging.LogLevel) =
+      match logLevel with
+      | Microsoft.Extensions.Logging.LogLevel.Trace ->
+        config.MinimumLevel.Verbose()
+      | Microsoft.Extensions.Logging.LogLevel.Debug ->
+        config.MinimumLevel.Debug()
+      | Microsoft.Extensions.Logging.LogLevel.Information ->
+        config.MinimumLevel.Information()
+      | Microsoft.Extensions.Logging.LogLevel.Warning ->
+        config.MinimumLevel.Warning()
+      | Microsoft.Extensions.Logging.LogLevel.Error ->
+        config.MinimumLevel.Error()
+      | Microsoft.Extensions.Logging.LogLevel.Critical ->
+        config.MinimumLevel.Fatal()
+      | Microsoft.Extensions.Logging.LogLevel.None
+      | _ -> config
+
   let create
     (
       prefixes: PrefixKind Set,
       logLevel: Microsoft.Extensions.Logging.LogLevel option
     ) =
-    let b =
-      LoggerConfiguration()
-        .Enrich.WithPerlaPrefix(prefixes)
-        .Enrich.FromLogContext()
-        .WriteTo.Spectre()
+    let logLevel =
+      defaultArg logLevel Microsoft.Extensions.Logging.LogLevel.None
 
-    match logLevel with
-    | Some Microsoft.Extensions.Logging.LogLevel.Trace ->
-      b.MinimumLevel.Verbose().CreateLogger()
-    | Some Microsoft.Extensions.Logging.LogLevel.Debug ->
-      b.MinimumLevel.Debug().CreateLogger()
-    | Some Microsoft.Extensions.Logging.LogLevel.Information ->
-      b.MinimumLevel.Information().CreateLogger()
-    | Some Microsoft.Extensions.Logging.LogLevel.Warning ->
-      b.MinimumLevel.Warning().CreateLogger()
-    | Some Microsoft.Extensions.Logging.LogLevel.Error ->
-      b.MinimumLevel.Error().CreateLogger()
-    | Some Microsoft.Extensions.Logging.LogLevel.Critical ->
-      b.MinimumLevel.Fatal().CreateLogger()
-    | Some Microsoft.Extensions.Logging.LogLevel.None
-    | Some _
-    | None -> b.CreateLogger()
-
-  let createFromConfig(config: LoggerConfiguration) = config.CreateLogger()
+    LoggerConfiguration()
+      .Enrich.WithPerlaPrefix(prefixes)
+      .Enrich.FromLogContext()
+      .WriteTo.Spectre()
+      .SetLevel(logLevel)
+      .CreateLogger()
 
 open Microsoft.Extensions.Logging
 open Serilog.Extensions.Logging
