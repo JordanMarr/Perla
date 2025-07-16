@@ -547,13 +547,13 @@ module Handlers =
         cssPaths
       )
 
-    // cleanup temporary directory
+    // // cleanup temporary directory
     try
-      Directory.Delete(UMX.untag vfsOutputDir, true) |> ignore
+      Directory.Delete(UMX.untag ".tmp/perla", true) |> ignore
     with ex ->
       container.Logger.LogWarning(
         "Failed to delete temporary directory {dir}: {error}",
-        UMX.untag vfsOutputDir,
+        UMX.untag ".tmp/perla",
         ex.Message
       )
 

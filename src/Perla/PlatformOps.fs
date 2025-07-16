@@ -421,6 +421,12 @@ module PlatformOps =
                 .WithValidation
                 CommandResultValidation.None
 
+            logger.LogTrace(
+              "Executing Esbuild command: {Command} {Arguments}",
+              command.TargetFilePath,
+              command.Arguments
+            )
+
             let! _ = command.ExecuteAsync(cancellationToken = token)
             return ()
           }

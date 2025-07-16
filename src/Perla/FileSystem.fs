@@ -530,6 +530,14 @@ module FileSystem =
 
           let filesToCopy = pattern |> Seq.toArray
 
+          args.Logger.LogTrace(
+            "Copying files from {Cwd} to {OutDir} with pattern: {Includes} excluding {Excludes}",
+            cwd,
+            outDir,
+            includes,
+            excludes
+          )
+
           let copyAndIncrement (tsk: ProgressTask) (file: string) =
             tsk.Increment 1
             let targetPath = file.Replace(cwd, outDir)
