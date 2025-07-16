@@ -299,17 +299,33 @@ module SerilogExtensions =
 
 [<RequireQualifiedAccess>]
 module PerlaSeriLogger =
-  let create(prefixes: PrefixKind Set) =
-    LoggerConfiguration()
-      .Enrich.WithPerlaPrefix(prefixes)
-      .Enrich.FromLogContext()
-      .WriteTo.Spectre()
-#if DEBUG
-      .MinimumLevel.Debug()
-#else
-      .MinimumLevel.Information()
-#endif
-      .CreateLogger()
+  let create
+    (
+      prefixes: PrefixKind Set,
+      logLevel: Microsoft.Extensions.Logging.LogLevel option
+    ) =
+    let b =
+      LoggerConfiguration()
+        .Enrich.WithPerlaPrefix(prefixes)
+        .Enrich.FromLogContext()
+        .WriteTo.Spectre()
+
+    match logLevel with
+    | Some Microsoft.Extensions.Logging.LogLevel.Trace ->
+      b.MinimumLevel.Verbose().CreateLogger()
+    | Some Microsoft.Extensions.Logging.LogLevel.Debug ->
+      b.MinimumLevel.Debug().CreateLogger()
+    | Some Microsoft.Extensions.Logging.LogLevel.Information ->
+      b.MinimumLevel.Information().CreateLogger()
+    | Some Microsoft.Extensions.Logging.LogLevel.Warning ->
+      b.MinimumLevel.Warning().CreateLogger()
+    | Some Microsoft.Extensions.Logging.LogLevel.Error ->
+      b.MinimumLevel.Error().CreateLogger()
+    | Some Microsoft.Extensions.Logging.LogLevel.Critical ->
+      b.MinimumLevel.Fatal().CreateLogger()
+    | Some Microsoft.Extensions.Logging.LogLevel.None
+    | Some _
+    | None -> b.CreateLogger()
 
   let createFromConfig(config: LoggerConfiguration) = config.CreateLogger()
 
@@ -373,7 +389,9 @@ module ILoggerExtensions =
       this.Log(logLevel, message, args)
 
   type ILoggingBuilder with
-    member this.AddPerlaLogger(?prefixes: PrefixKind list) =
+    member this.AddPerlaLogger
+      (?logLevel: LogLevel, ?prefixes: PrefixKind list)
+      =
       let prefixes = defaultArg prefixes [ Log ]
-      let serilogLogger = PerlaSeriLogger.create(Set.ofList prefixes)
+      let serilogLogger = PerlaSeriLogger.create(Set.ofList prefixes, logLevel)
       this.AddProvider(new SerilogLoggerProvider(serilogLogger))

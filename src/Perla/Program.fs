@@ -8,16 +8,31 @@ open Perla.FileSystem
 open Perla.Commands
 open Perla.Logger
 
+
 module Env =
 
   let SetupAppContainer() =
     let lf =
+#if TRACE
+      let loglevel = LogLevel.Trace
+#else
+#if DEBUG
+      let loglevel = LogLevel.Debug
+#else
+      let loglevel = LogLevel.Information
+#endif
+#endif
       LoggerFactory.Create(fun builder ->
-        builder.AddPerlaLogger().SetMinimumLevel(LogLevel.Debug) |> ignore)
+        builder.AddPerlaLogger(logLevel = loglevel) |> ignore)
 
     let AppLogger = lf.CreateLogger("Perla")
 
     let directories = PerlaDirectories.Create()
+
+    try
+      System.IO.DirectoryInfo($"{directories.PerlaArtifactsRoot}").Create()
+    with _ ->
+      ()
 
     directories.SetCwdToProject()
 
