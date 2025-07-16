@@ -71,13 +71,155 @@ module PkgManager =
     ]
     |> Set
 
+  // Download all files for a package to the global cache directory
+  let private downloadPackage
+    (logger: ILogger)
+    (cacheDir: DirectoryInfo)
+    (package: string)
+    (content: DownloadPackage)
+    =
+    asyncEx {
+      let globalPkgPath = Path.Combine(cacheDir.FullName, package)
+
+      if not(Directory.Exists(globalPkgPath)) then
+        logger.LogDebug(
+          "[Download] Downloading package '{package}'...",
+          package
+        )
+
+        logger.LogTrace(
+          "[Download] Downloading to: {globalPkgPath}",
+          globalPkgPath
+        )
+
+        logger.LogDebug(
+          "[Download] Working through {fileCount} files...",
+          content.files.Length
+        )
+
+        for file in content.files do
+          let filePath = Path.Combine(cacheDir.FullName, package, file)
+          let downloadUri = Uri(content.pkgUrl, file)
+
+          logger.LogTrace(
+            "[Download] Downloading file: {file} from {uri}",
+            file,
+            downloadUri
+          )
+
+          let! response =
+            get(downloadUri.ToString())
+            |> Config.timeoutInSeconds 10
+            |> Request.sendAsync
+
+          use! fileContent = response |> Response.toStreamAsync
+
+          Directory.CreateDirectory(
+            Path.GetDirectoryName filePath |> nonNull |> Path.GetFullPath
+          )
+          |> ignore
+
+          use fileStream = File.OpenWrite filePath
+          do! fileContent.CopyToAsync(fileStream)
+          logger.LogTrace("[Download] Downloaded file: {filePath}", filePath)
+      else
+        logger.LogDebug(
+          "[Download] Package '{package}' already exists, skipping download.",
+          package
+        )
+    }
+
+  // Create the .perla symlink for a package
+  let private createPerlaSymlink
+    (logger: ILogger)
+    (cacheDir: DirectoryInfo)
+    (perlaDir: DirectoryInfo)
+    (package: string)
+    =
+    asyncEx {
+      let medusaPkgPath = Path.Combine(perlaDir.FullName, package)
+      let globalPkgPath = Path.Combine(cacheDir.FullName, package)
+
+      Path.GetDirectoryName medusaPkgPath
+      |> nonNull
+      |> Directory.CreateDirectory
+      |> ignore
+
+      if Directory.Exists(medusaPkgPath) then
+        logger.LogDebug(
+          "[Symlink] .perla symlink for '{package}' already exists, skipping.",
+          package
+        )
+
+        logger.LogTrace(
+          "[Symlink] Existing .perla symlink: {medusaPkgPath}",
+          medusaPkgPath
+        )
+      else
+        logger.LogDebug(
+          "[Symlink] Creating .perla symlink: {medusaPkgPath} -> {globalPkgPath}",
+          medusaPkgPath,
+          globalPkgPath
+        )
+
+        Directory.CreateSymbolicLink(medusaPkgPath, globalPkgPath) |> ignore
+
+        logger.LogTrace(
+          "[Symlink] Created .perla symlink: {medusaPkgPath} -> {globalPkgPath}",
+          medusaPkgPath,
+          globalPkgPath
+        )
+    }
+
+  // Create the flat symlink for a package
+  let private createFlatSymlink
+    (logger: ILogger)
+    (localCacheDir: DirectoryInfo)
+    (perlaDir: DirectoryInfo)
+    (package: string)
+    =
+    asyncEx {
+      let packageName = ProviderOps.extractPackageNameForFlatStructure package
+      let flatPkgPath = Path.Combine(localCacheDir.FullName, packageName)
+      let medusaPkgPath = Path.Combine(perlaDir.FullName, package)
+
+      Path.GetDirectoryName flatPkgPath
+      |> nonNull
+      |> Directory.CreateDirectory
+      |> ignore
+
+      if Directory.Exists(flatPkgPath) then
+        logger.LogDebug(
+          "[Symlink] Flat symlink for '{packageName}' already exists, skipping.",
+          packageName
+        )
+
+        logger.LogTrace(
+          "[Symlink] Existing flat symlink: {flatPkgPath}",
+          flatPkgPath
+        )
+      else
+        logger.LogDebug(
+          "[Symlink] Creating flat symlink: {flatPkgPath} -> {medusaPkgPath}",
+          flatPkgPath,
+          medusaPkgPath
+        )
+
+        Directory.CreateSymbolicLink(flatPkgPath, medusaPkgPath) |> ignore
+
+        logger.LogTrace(
+          "[Symlink] Created flat symlink: {flatPkgPath} -> {medusaPkgPath}",
+          flatPkgPath,
+          medusaPkgPath
+        )
+    }
+
   let cacheResponse
     (args: PkgManagerServiceArgs)
     (response: Map<string, DownloadPackage>)
     =
     cancellableTask {
       let { logger = logger; config = config } = args
-
       let cacheDir = DirectoryInfo(config.GlobalCachePath)
 
       let localCacheDir =
@@ -87,7 +229,6 @@ module PkgManager =
         DirectoryInfo(Path.Combine(localCacheDir.FullName, ".perla"))
 
       localCacheDir.Create()
-      localCacheDir.Create()
       perlaDir.Create()
 
       logger.LogDebug(
@@ -96,106 +237,17 @@ module PkgManager =
       )
 
       logger.LogTrace("Working with Download Map: {downloadMap}", response)
-
-      let tasks =
+      // Per-package pipeline: download, then .perla symlink, then flat symlink
+      let perPackageTasks =
         response
         |> Map.toArray
         |> Array.map(fun (package, content) -> asyncEx {
-          let! token = Async.CancellationToken
-          let medusaPkgPath = Path.Combine(perlaDir.FullName, package)
-          let localPkgTarget = Path.Combine(cacheDir.FullName, package)
-
-          // Extract the package name without a version for flat structure
-          let packageName =
-            ProviderOps.extractPackageNameForFlatStructure package
-
-          let flatPkgPath = Path.Combine(localCacheDir.FullName, packageName)
-
-          // Create Parent Directories for the medusa path
-          Path.GetDirectoryName medusaPkgPath
-          |> nonNull
-          |> Directory.CreateDirectory
-          |> ignore
-
-          // Create Parent Directories for flat path
-          Path.GetDirectoryName flatPkgPath
-          |> nonNull
-          |> Directory.CreateDirectory
-          |> ignore
-
-          // If the medusa store already has the package, skip creating the symbolic link
-          if Directory.Exists medusaPkgPath then
-            logger.LogDebug(
-              "Package '{package}' already exists in medusa store, skipping symbolic link creation.",
-              package
-            )
-          else
-            logger.LogDebug(
-              "Creating symlink to store: {medusaPkgPath} -> {localPkgTarget}",
-              medusaPkgPath,
-              localPkgTarget
-            )
-
-            Directory.CreateSymbolicLink(medusaPkgPath, localPkgTarget)
-            |> ignore
-
-          // Create flat symlink if it doesn't exist
-          if Directory.Exists flatPkgPath then
-            logger.LogDebug(
-              "Flat package '{packageName}' already exists, skipping flat symlink creation.",
-              packageName
-            )
-          else
-            logger.LogDebug(
-              "Creating flat symlink: {flatPkgPath} -> {medusaPkgPath}",
-              flatPkgPath,
-              medusaPkgPath
-            )
-
-            Directory.CreateSymbolicLink(flatPkgPath, medusaPkgPath) |> ignore
-
-          if Directory.Exists(Path.Combine(cacheDir.FullName, package)) then
-            logger.LogDebug(
-              "Package '{package}' already exists, skipping download.",
-              package
-            )
-
-            return ()
-          else
-            logger.LogDebug("Downloading package '{package}'...", package)
-
-            logger.LogDebug(
-              "Working through {content.files.Length} files...",
-              content.files.Length
-            )
-
-            for file in content.files do
-              let filePath = Path.Combine(cacheDir.FullName, package, file)
-              let downloadUri = Uri(content.pkgUrl, file)
-
-              let! response =
-                get(downloadUri.ToString())
-                |> Config.timeoutInSeconds 10
-                |> Config.cancellationToken token
-                |> Request.sendAsync
-
-              use! content = response |> Response.toStreamAsync
-
-              Directory.CreateDirectory(
-                Path.GetDirectoryName filePath |> nonNull |> Path.GetFullPath
-              )
-              |> ignore
-
-              use file = File.OpenWrite filePath
-
-              do! content.CopyToAsync(file, cancellationToken = token)
-
-              logger.LogTrace("Downloaded file: {filePath}", filePath)
-
-            return ()
+          do! downloadPackage logger cacheDir package content
+          do! createPerlaSymlink logger cacheDir perlaDir package
+          do! createFlatSymlink logger localCacheDir perlaDir package
         })
 
-      do! Async.Parallel tasks |> Async.Ignore
+      do! Async.Parallel(perPackageTasks, 5) |> Async.Ignore
       return ()
     }
 
