@@ -7,6 +7,7 @@ open IcedTasks
 open FSharp.UMX
 open Perla.Units
 open Perla.Types
+open Perla.Logger
 open Microsoft.Extensions.Logging
 open CliWrap
 open CliWrap.Buffered
@@ -384,6 +385,7 @@ module PlatformOps =
                   argsBuilder.Add(entrypoint).Add("--bundle")
                   |> (if minify then _.Add("--minify") else id)
                   |> _.Add($"--outdir={outdir}")
+                  |> _.Add("--preserve-symlinks")
                   |> buildEsbuildFileLoaders fileLoaders
                   |> ignore)
 
@@ -397,6 +399,15 @@ module PlatformOps =
           cancellableTask {
             let! token = CancellableTask.getCancellationToken()
 
+            logger.LogDebug(
+              "Starting Esbuild for entrypoint '{entrypoint}': cwd: {cwd} - outdir: {outdir}",
+              entrypoint,
+              workingDir,
+              outdir
+            )
+
+            let output = Path.Combine(outdir, entrypoint)
+
             let command =
               Cli
                 .Wrap(esbuildPath |> UMX.untag)
@@ -404,17 +415,12 @@ module PlatformOps =
                 .WithStandardOutputPipe(
                   PipeTarget.ToDelegate logger.LogInformation
                 )
-                .WithEnvironmentVariables(fun envvars ->
-                  envvars.Set(
-                    "NODE_PATH",
-                    Path.Combine(UMX.untag workingDir, "node_modules")
-                  )
-                  |> ignore)
                 .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
                 .WithArguments(fun argsBuilder ->
                   argsBuilder.Add entrypoint
                   |> buildEsbuildConfig config
-                  |> _.Add($"--outdir={outdir}")
+                  |> _.Add($"--outfile={output}")
+                  |> _.Add("--preserve-symlinks")
                   |> buildEsbuildFileLoaders config.fileLoaders
                   |> ignore)
                 .WithValidation

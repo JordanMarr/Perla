@@ -471,6 +471,8 @@ module Handlers =
 
     let config = container.Configuration.PerlaConfig |> withNodeModules
 
+    let buildOutDir = config |> AVal.map _.build.outDir |> AVal.force
+
     // Step 1: Fable build (if configured)
     do! container.BuildService.RunFable(config)
 
@@ -499,7 +501,7 @@ module Handlers =
     )
 
     // Step 7: Emit env file if needed
-    container.BuildService.EmitEnvFile(config, tempDir)
+    container.BuildService.EmitEnvFile(config, buildOutDir)
 
     // Step 8: Prepare index and import map
     use browserCtx = new BrowsingContext()

@@ -614,6 +614,7 @@ module VirtualFs =
     (mountedDirs: MountedDirectories)
     : IObservable<FileChangedEvent> =
     let fileChangeObservables = ResizeArray<IObservable<FileChangedEvent>>()
+    let mountedDirs = mountedDirs |> Map.remove(UMX.tag "/node_modules")
 
     deps.logger.LogDebug(
       "Creating file change stream for {DirCount} mounted directories",

@@ -39,6 +39,7 @@ type BuildServiceArgs = {
   ExtensibilityService: Perla.Extensibility.ExtensibilityService
   VirtualFileSystem: Perla.VirtualFs.VirtualFileSystem
   FableService: Perla.Fable.FableService
+  Directories: Perla.PerlaDirectories
 }
 
 [<Interface>]

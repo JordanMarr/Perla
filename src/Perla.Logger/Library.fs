@@ -214,10 +214,7 @@ type PerlaPrefixEnricher(prefixes: PrefixKind Set) =
           propertyFactory.CreateProperty("PlLog", Constants.LogPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Scaffold ->
-          propertyFactory.CreateProperty(
-            "PlScaffold",
-            Constants.ScaffoldPrefix
-          )
+          propertyFactory.CreateProperty("PlScaffold", Constants.ScaffoldPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Build ->
           propertyFactory.CreateProperty("PlBuild", Constants.BuildPrefix)
@@ -307,6 +304,11 @@ module PerlaSeriLogger =
       .Enrich.WithPerlaPrefix(prefixes)
       .Enrich.FromLogContext()
       .WriteTo.Spectre()
+#if DEBUG
+      .MinimumLevel.Debug()
+#else
+      .MinimumLevel.Information()
+#endif
       .CreateLogger()
 
   let createFromConfig(config: LoggerConfiguration) = config.CreateLogger()

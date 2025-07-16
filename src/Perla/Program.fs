@@ -13,14 +13,7 @@ module Env =
   let SetupAppContainer() =
     let lf =
       LoggerFactory.Create(fun builder ->
-        builder
-          .AddPerlaLogger()
-#if DEBUG
-          .SetMinimumLevel(LogLevel.Debug)
-#else
-          .SetMinimumLevel(LogLevel.Information)
-#endif
-        |> ignore)
+        builder.AddPerlaLogger().SetMinimumLevel(LogLevel.Debug) |> ignore)
 
     let AppLogger = lf.CreateLogger("Perla")
 

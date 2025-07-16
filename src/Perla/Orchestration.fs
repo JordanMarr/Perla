@@ -412,6 +412,7 @@ module AppContainer =
             ExtensibilityService = extensibilityService
             VirtualFileSystem = virtualFileSystem
             FableService = fableService
+            Directories = directories
           }
     }
 

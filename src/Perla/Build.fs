@@ -26,6 +26,7 @@ type BuildServiceArgs = {
   ExtensibilityService: Perla.Extensibility.ExtensibilityService
   VirtualFileSystem: Perla.VirtualFs.VirtualFileSystem
   FableService: Perla.Fable.FableService
+  Directories: PerlaDirectories
 }
 
 type BuildOptions = { enablePreview: bool }
@@ -292,7 +293,7 @@ module BuildService =
                 args.EsbuildService.ProcessJS(
                   entrypoint,
                   tempDir,
-                  config.build.outDir,
+                  UMX.tag esbuildOutput,
                   {
                     config.esbuild with
                         externals =
@@ -304,8 +305,8 @@ module BuildService =
               do!
                 args.EsbuildService.ProcessCss(
                   entrypoint,
+                  tempDir,
                   UMX.tag esbuildOutput,
-                  config.build.outDir,
                   config.esbuild
                 )
 
@@ -314,7 +315,13 @@ module BuildService =
 
         member _.MoveOrCopyOutput(config, tempDir, esbuildOutputPath) =
           let config = config |> AVal.force
-          let outDir = config.build.outDir
+
+          let outDir =
+            Path.Combine(
+              UMX.untag args.Directories.CurrentWorkingDirectory,
+              UMX.untag config.build.outDir
+            )
+
 
           let isEsbuildPluginPresent =
             config.plugins |> List.contains Constants.PerlaEsbuildPluginName
@@ -325,9 +332,11 @@ module BuildService =
                 "Copying all files from esbuild output to outDir (esbuild present, useLocalPkgs true)"
               )
 
+              args.Logger.LogDebug("{from} -> {to}", esbuildOutputPath, outDir)
+
               args.FsManager.CopyFiles(
                 DirectoryInfo(UMX.untag esbuildOutputPath),
-                outDir
+                UMX.tag outDir
               )
             else
               args.Logger.LogDebug(
@@ -340,7 +349,10 @@ module BuildService =
               "Copying all files from tempDir to outDir (esbuild not present)"
             )
 
-            args.FsManager.CopyFiles(DirectoryInfo(UMX.untag tempDir), outDir)
+            args.FsManager.CopyFiles(
+              DirectoryInfo(UMX.untag tempDir),
+              UMX.tag outDir
+            )
 
           // globs are always copied
           args.FsManager.CopyGlobs config.build
