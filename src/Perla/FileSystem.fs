@@ -542,6 +542,12 @@ module FileSystem =
             with _ ->
               ()
 
+            args.Logger.LogDebug(
+              "Copying {File} -> {TargetPath}",
+              file,
+              targetPath
+            )
+
             File.Copy(file, targetPath, true)
 
           AnsiConsole
@@ -571,20 +577,20 @@ module FileSystem =
               UMX.untag config.envPath
             )
 
-          // ensure the directory exists
-          Directory.CreateDirectory tmpPath |> ignore
+            // ensure the directory exists
+            Directory.CreateDirectory tmpPath |> ignore
 
-          let content =
-            content
-            |> Map.fold
-              (fun (sb: StringBuilder) key value ->
-                sb.AppendLine $"export const {key} = \"{value}\"")
-              (StringBuilder())
-            |> _.ToString()
+            let content =
+              content
+              |> Map.fold
+                (fun (sb: StringBuilder) key value ->
+                  sb.AppendLine $"export const {key} = \"{value}\"")
+                (StringBuilder())
+              |> _.ToString()
 
-          // remove the leading slash
-          let targetFile = (UMX.untag config.envPath)[1..]
+            // remove the leading slash
+            let targetFile = (UMX.untag config.envPath)[1..]
 
-          let path = Path.Combine(tmpPath, targetFile) |> Path.GetFullPath
-          File.WriteAllText(path, content)
+            let path = Path.Combine(tmpPath, targetFile) |> Path.GetFullPath
+            File.WriteAllText(path, content)
     }

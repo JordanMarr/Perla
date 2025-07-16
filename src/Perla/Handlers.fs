@@ -492,8 +492,7 @@ module Handlers =
     do! container.BuildService.LoadVfs(config)
 
     // Step 6: Copy VFS to disk
-    let! esbuildTmpDir = container.BuildService.CopyVfsToDisk(vfsOutputDir)
-    let tempDir = vfsOutputDir
+    let! tempDir = container.BuildService.CopyVfsToDisk vfsOutputDir
 
     container.Logger.LogInformation(
       "Copying Processed files to {tempDirectory}",
@@ -548,6 +547,16 @@ module Handlers =
         cssPaths
       )
 
+    // cleanup temporary directory
+    try
+      Directory.Delete(UMX.untag vfsOutputDir, true) |> ignore
+    with ex ->
+      container.Logger.LogWarning(
+        "Failed to delete temporary directory {dir}: {error}",
+        UMX.untag vfsOutputDir,
+        ex.Message
+      )
+
     // Step 11: Start preview server if requested
     if options.enablePreview then
       container.Logger.LogInformation "Starting a preview server for the build"
@@ -561,16 +570,6 @@ module Handlers =
           FileChangedEvents = container.VirtualFileSystem.FileChanges
         }
         token
-
-    // cleanup temporary directory
-    try
-      Directory.Delete(UMX.untag vfsOutputDir, true) |> ignore
-    with ex ->
-      container.Logger.LogWarning(
-        "Failed to delete temporary directory {dir}: {error}",
-        UMX.untag vfsOutputDir,
-        ex.Message
-      )
 
     return 0
   }

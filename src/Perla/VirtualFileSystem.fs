@@ -291,7 +291,7 @@ module VirtualFs =
     async {
       let sourcePath = UMX.untag systemPath
 
-      deps.logger.LogDebug(
+      deps.logger.LogTrace(
         "Registering file in node_modules: {FilePath}",
         sourcePath
       )
@@ -834,6 +834,12 @@ module VirtualFs =
 
             Directory.CreateDirectory targetDir |> ignore
 
+            args.Logger.LogDebug(
+              "Copying Server entry {File} to {TargetPath}",
+              serverUrl,
+              targetPath
+            )
+
             match entry.kind with
             | TextFile content ->
               let fileSource = UMX.untag content.source
@@ -866,8 +872,8 @@ module VirtualFs =
         member _.FileChanges = fileChangedSubject
 
         member _.Dispose() =
-          args.Logger.LogDebug("Disposing virtual file system")
+          args.Logger.LogTrace("Disposing virtual file system")
           connection |> Option.iter(_.Dispose())
           stopWatching args.Logger watchers ()
-          args.Logger.LogDebug("Virtual file system disposed")
+          args.Logger.LogTrace("Virtual file system disposed")
     }
