@@ -1,10 +1,8 @@
 ﻿namespace Perla.Handlers
 
 open IcedTasks
-open FsToolkit.ErrorHandling
 open Perla
 open Perla.Types
-open Perla.Extensibility
 
 
 [<Struct; RequireQualifiedAccess>]
@@ -27,17 +25,12 @@ type SetupOptions = {
 
 type ListTemplatesOptions = { format: ListFormat }
 
-type AddPackageOptions = {
-  package: string
-  version: string option
-}
-
-type RemovePackageOptions = { package: string }
+type DependencyOptions = { packages: string Set }
 
 type ListPackagesOptions = { format: ListFormat }
 
 type InstallOptions = {
-  offline: bool
+  offline: bool option
   source: PkgManager.DownloadProvider voption
 }
 
@@ -96,12 +89,12 @@ module Handlers =
 
   val runAddPackage:
     container: AppContainer ->
-    options: AddPackageOptions ->
+    options: DependencyOptions ->
       CancellableTask<int>
 
   val runRemovePackage:
     container: AppContainer ->
-    options: RemovePackageOptions ->
+    options: DependencyOptions ->
       CancellableTask<int>
 
   val runListPackages:

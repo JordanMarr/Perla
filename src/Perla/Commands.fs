@@ -1,16 +1,13 @@
 namespace Perla.Commands
 
-open System.Threading
 
 open System.CommandLine
-open System.CommandLine.Invocation
 open System.CommandLine.Parsing
 open Microsoft.Extensions.Logging
 
 open IcedTasks
 
 open Perla
-open Perla.Extensibility
 open Perla.Types
 open Perla.Handlers
 open Perla.Warmup
@@ -29,12 +26,11 @@ type PerlaOptions =
     |> desc "The source to download packages from. Defaults to jspm.io"
     |> acceptOnlyFromAmong [ "jspm.io"; "unpkg"; "jsdelivr" ]
     |> defaultValue ValueNone
-    |> customParser (fun result ->
+    |> customParser(fun result ->
       match result.Tokens |> Seq.tryHead with
       | Some token ->
         PkgManager.DownloadProvider.fromString token.Value |> ValueSome
-      | None -> ValueNone
-    )
+      | None -> ValueNone)
 
   static member Browsers =
     option<Browser Set> "--browsers"
@@ -44,26 +40,24 @@ type PerlaOptions =
     |> allowMultipleArgumentsPerToken
     |> acceptOnlyFromAmong [ "chromium"; "firefox"; "webkit"; "edge"; "chrome" ]
     |> defaultValue Set.empty
-    |> customParser (fun result ->
+    |> customParser(fun result ->
       result.Tokens
       |> Seq.map(fun token -> token.Value |> Browser.FromString)
-      |> Set.ofSeq
-    )
+      |> Set.ofSeq)
 
   static member DisplayMode =
     option<ListFormat> "--list-format"
     |> desc "The chosen format to display the existing templates"
     |> acceptOnlyFromAmong [ "table"; "text" ]
     |> defaultValue ListFormat.HumanReadable
-    |> customParser (fun result ->
+    |> customParser(fun result ->
       match result.Tokens |> Seq.tryHead with
       | Some token ->
         match token.Value with
         | "table" -> ListFormat.HumanReadable
         | "text" -> ListFormat.TextOnly
         | _ -> ListFormat.HumanReadable
-      | None -> ListFormat.HumanReadable
-    )
+      | None -> ListFormat.HumanReadable)
 
 [<Class; Sealed>]
 type PerlaArguments =
@@ -71,51 +65,92 @@ type PerlaArguments =
     argument<string array> "properties"
     |> desc "A property, properties or json path-like string names to describe"
     |> arity ArgumentArity.ZeroOrMore
-    |> customParser (fun result ->
-      result.Tokens
-      |> Seq.map(fun token -> token.Value)
-      |> Seq.distinct
-      |> Seq.toArray
-    )
+    |> customParser(fun result ->
+      result.Tokens |> Seq.map _.Value |> Seq.distinct |> Seq.toArray)
 
 type GlobalOptions = {
   ci: bool
   skipPrompts: bool
   previewCommand: bool
   setup: bool
+  logLevel: LogLevel
 }
 
 module GlobalOptions =
 
-  let setup: ActionInput<bool> =
-    option "--setup"
+  let setup: ActionInput<bool option> =
+    optionMaybe<bool> "--setup"
     |> alias "-s"
     |> description
       "Run the setup command to install templates and other dependencies"
-    |> defaultValue true
+    |> defaultValue(Some true)
 
-  let ci: ActionInput<bool> =
-    option "--ci"
+  let ci: ActionInput<bool option> =
+    optionMaybe<bool> "--ci"
     |> description
       "Run the command in CI mode, which disables interactive prompts"
-    |> defaultValue false
+    |> defaultValue None
 
-  let skipPrompts: ActionInput<bool> =
-    option "--skip"
+  let skipPrompts: ActionInput<bool option> =
+    optionMaybe<bool> "--skip"
     |> description "Skip interactive prompts and use defaults"
-    |> defaultValue false
+    |> defaultValue None
 
-  let previewCommand: ActionInput<bool> =
-    option "--preview-command"
-    |> description "Allows running a command before its officia release"
-    |> defaultValue false
+  let previewCommand: ActionInput<bool option> =
+    optionMaybe<bool> "--preview-command"
+    |> description "Allows running a command before its official release"
+    |> defaultValue None
 
-  let bind(parseResult) = {
-    ci = ci.GetValue parseResult
-    skipPrompts = skipPrompts.GetValue parseResult
-    previewCommand = previewCommand.GetValue parseResult
-    setup = setup.GetValue parseResult
-  }
+  let logLevel: ActionInput<LogLevel> =
+    let inline parser(result: ArgumentResult) =
+      match result.Tokens |> Seq.tryHead with
+      | Some token ->
+        match token.Value with
+        | "Trace" -> LogLevel.Trace
+        | "Debug" -> LogLevel.Debug
+        | "Information" -> LogLevel.Information
+        | "Warning" -> LogLevel.Warning
+        | "Error" -> LogLevel.Error
+        | "Critical" -> LogLevel.Critical
+        | _ -> LogLevel.Information
+      | None -> LogLevel.Information
+
+    Option<LogLevel>(
+      "--log-level",
+      "-l",
+      Description = "The log level to use for the command",
+      Required = false,
+      CustomParser = parser,
+      DefaultValueFactory = (fun _ -> LogLevel.Information)
+    )
+      .AcceptOnlyFromAmong(
+        "Trace",
+        "Debug",
+        "Information",
+        "Warning",
+        "Error",
+        "Critical"
+      )
+    |> Input.ofOption
+
+  let bind parseResult =
+    let ci = ci.GetValue parseResult |> Option.defaultValue false
+
+    let skipPrompts =
+      skipPrompts.GetValue parseResult |> Option.defaultValue false
+
+    let previewCommand =
+      previewCommand.GetValue parseResult |> Option.defaultValue false
+
+    let setup = setup.GetValue parseResult |> Option.defaultValue true
+
+    {
+      ci = ci
+      skipPrompts = skipPrompts
+      previewCommand = previewCommand
+      setup = setup
+      logLevel = logLevel.GetValue parseResult
+    }
 
 
 
@@ -138,7 +173,7 @@ module DescribeInputs =
         "A property, properties or json path-like string names to describe"
       , Arity = ArgumentArity.ZeroOrMore
     )
-    |> Input.ofArgument
+    |> ofArgument
 
   let describeCurrent: ActionInput<bool> =
     option "--current"
@@ -167,8 +202,18 @@ module PackageInputs =
     |> description "Install packages without network access"
 
 
-  let package: ActionInput<string> =
-    argument "package" |> description "Name of the JS Package"
+  let packages: ActionInput<string Set> =
+    let parser(result: ArgumentResult) =
+      result.Tokens |> Seq.map _.Value |> Set.ofSeq
+
+    Argument<string Set>(
+      "packages",
+      CustomParser = parser,
+      Arity = ArgumentArity.OneOrMore,
+      Description = "set of packages to add as dependencies"
+    )
+    |> Input.ofArgument
+
 
   let version: ActionInput<string option> =
     optionMaybe "--version"
@@ -208,8 +253,7 @@ module TemplateInputs =
     |> alias "-r"
     |> description "If it exists, removes the template repository for Perla"
 
-  let displayMode: ActionInput<ListFormat> =
-    PerlaOptions.DisplayMode
+  let displayMode: ActionInput<ListFormat> = PerlaOptions.DisplayMode
 
 [<RequireQualifiedAccess>]
 module ProjectInputs =
@@ -244,8 +288,7 @@ module BuildInputs =
 
 [<RequireQualifiedAccess>]
 module TestingInputs =
-  let browsers: ActionInput<Browser Set> =
-    PerlaOptions.Browsers
+  let browsers: ActionInput<Browser Set> = PerlaOptions.Browsers
 
   let files: ActionInput<string array> =
     option "--tests"
@@ -317,7 +360,7 @@ module Commands =
              container.Db,
              container.Configuration.PerlaConfig,
              container.FableService,
-             [ Warmup.Esbuild; Warmup.Fable ])
+             [ Esbuild; Fable ])
             context.CancellationToken
 
         match result with
@@ -359,7 +402,7 @@ module Commands =
       description "Builds the SPA application for distribution"
       addAlias "b"
 
-      inputs(Input.context, BuildInputs.preview)
+      inputs(context, BuildInputs.preview)
 
       setAction handleCommand
     }
@@ -387,7 +430,7 @@ module Commands =
                container.Db,
                container.Configuration.PerlaConfig,
                container.FableService,
-               [ Warmup.Fable; Warmup.Esbuild ])
+               [ Fable; Esbuild ])
               context.CancellationToken
 
           match result with
@@ -431,23 +474,21 @@ module Commands =
       description desc
       addAliases [ "s"; "start" ]
 
-      inputs(Input.context, ServeInputs.port, ServeInputs.host, ServeInputs.ssl)
+      inputs(context, ServeInputs.port, ServeInputs.host, ServeInputs.ssl)
 
       setAction handleCommand
     }
 
   let RemovePackage(container: AppContainer) =
 
-    let handleCommand
-      (ctx: ActionContext, package: string, alias: string option)
-      =
-      let options = { package = package }
+    let handleCommand(ctx: ActionContext, package: string Set) =
+      let options = { packages = package }
       Handlers.runRemovePackage container options ctx.CancellationToken
 
     command "remove" {
       description "Removes a package from the project dependencies"
 
-      inputs(Input.context, PackageInputs.package, PackageInputs.alias)
+      inputs(context, PackageInputs.packages)
       setAction handleCommand
     }
 
@@ -458,32 +499,27 @@ module Commands =
         offline: bool option,
         source: PkgManager.DownloadProvider voption
       ) =
-      let options = {
-        offline = defaultArg offline false
-        source = source
-      }
+      let options = { offline = offline; source = source }
 
       Handlers.runInstall container options ctx.CancellationToken
 
     command "install" {
       description "Installs the project dependencies from the perla.json file"
-      inputs(Input.context, PackageInputs.offline, SharedInputs.source)
+      inputs(context, PackageInputs.offline, SharedInputs.source)
       setAction handleCommand
     }
 
   let AddPackage(container: AppContainer) =
 
-    let handleCommand
-      (ctx: ActionContext, package: string, version: string option)
-      =
-      let options = { package = package; version = version }
+    let handleCommand(ctx: ActionContext, packages: string Set) =
+      let options = { packages = packages }
 
       Handlers.runAddPackage container options ctx.CancellationToken
 
     command "add" {
       description "Adds a package to the project dependencies"
 
-      inputs(Input.context, PackageInputs.package, PackageInputs.version)
+      inputs(context, PackageInputs.packages)
 
       setAction handleCommand
     }
@@ -510,7 +546,7 @@ module Commands =
       description
         "Lists the current dependencies in a table or an npm style json string"
 
-      inputs(Input.context, PackageInputs.showAsNpm)
+      inputs(context, PackageInputs.showAsNpm)
       setAction handleCommand
     }
 
@@ -617,7 +653,7 @@ module Commands =
         "Handles Template Repository operations such as list, add, update, and remove templates"
 
       inputs(
-        Input.context,
+        context,
         TemplateInputs.repositoryName,
         TemplateInputs.addTemplate,
         TemplateInputs.updateTemplate,
@@ -661,7 +697,7 @@ module Commands =
                container.Db,
                container.Configuration.PerlaConfig,
                container.FableService,
-               [ Warmup.Esbuild; Warmup.Fable ])
+               [ Esbuild; Fable ])
               ctx.CancellationToken
 
           match result with
@@ -705,7 +741,7 @@ module Commands =
         "Creates a new project based on the selected template if it exists"
 
       inputs(
-        Input.context,
+        context,
         ProjectInputs.projectName,
         ProjectInputs.byId,
         ProjectInputs.byShortName,
@@ -746,7 +782,7 @@ module Commands =
       description "Runs client side tests in a headless browser"
 
       inputs(
-        Input.context,
+        context,
         TestingInputs.browsers,
         TestingInputs.files,
         TestingInputs.skips,
@@ -778,7 +814,7 @@ module Commands =
         "Describes the perla.json file or it's properties as requested"
 
       inputs(
-        Input.context,
+        context,
         DescribeInputs.perlaProperties,
         DescribeInputs.describeCurrent
       )

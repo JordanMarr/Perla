@@ -101,13 +101,29 @@ type PerlaFsManagerArgs = {
 [<RequireQualifiedAccess>]
 module FileSystem =
 
+  let resolveEsbuildPath
+    (platform: PlatformOps, directories: PerlaDirectories)
+    (version: string<Semver>)
+    =
+    let bin = if platform.IsWindows() then "" else "bin"
+    let exec = if platform.IsWindows() then ".exe" else ""
+
+    directories.PerlaArtifactsRoot
+    |/ UMX.untag version
+    |/ "package"
+    |/ bin
+    |/ $"esbuild{exec}"
+    |> UMX.untag
+    |> Path.GetFullPath
+    |> UMX.tag<SystemPath>
+
   let GetManager(args: PerlaFsManagerArgs) : PerlaFsManager =
     { new PerlaFsManager with
         member _.CopyFiles(sourcePath, targetPath) =
-          let progress = Spectre.Console.AnsiConsole.Progress()
+          let progress = AnsiConsole.Progress()
           let files = sourcePath.GetFiles("*", SearchOption.AllDirectories)
 
-          let targetDir = DirectoryInfo(FSharp.UMX.UMX.untag targetPath)
+          let targetDir = DirectoryInfo(UMX.untag targetPath)
           targetDir.Create()
 
           progress.Start(fun ctx ->
@@ -118,21 +134,14 @@ module FileSystem =
             |> Array.Parallel.iter(fun file ->
               // Compute the relative path from the source root
               let relPath =
-                System.IO.Path.GetRelativePath(
-                  sourcePath.FullName,
-                  file.FullName
-                )
+                Path.GetRelativePath(sourcePath.FullName, file.FullName)
 
-              let destPath =
-                System.IO.Path.Combine(
-                  FSharp.UMX.UMX.untag targetPath,
-                  relPath
-                )
+              let destPath = Path.Combine(UMX.untag targetPath, relPath)
 
               destPath
-              |> System.IO.Path.GetDirectoryName
+              |> Path.GetDirectoryName
               |> nonNull
-              |> System.IO.Path.GetFullPath
+              |> Path.GetFullPath
               |> Directory.CreateDirectory
               |> ignore
 
@@ -173,16 +182,15 @@ module FileSystem =
 
             if matchResult.Success then
               Some(
-                matchResult.Groups.["envvarname"].Value,
-                matchResult.Groups.["content"].Value
+                matchResult.Groups["envvarname"].Value,
+                matchResult.Groups["content"].Value
               )
             else
               None
 
           let reduction =
             AdaptiveReduction.fold Map.empty<string, string>
-            <| fun acc next ->
-              Map.fold (fun acc k v -> Map.add k v acc) acc next
+            <| Map.fold(fun acc k v -> Map.add k v acc)
 
           let! dotEnvFilesContent =
             dotEnvFiles
@@ -198,9 +206,9 @@ module FileSystem =
             Environment.GetEnvironmentVariables()
             |> Seq.cast<Collections.DictionaryEntry>
             |> Seq.filter(fun entry ->
-              (nonNull(entry.Key.ToString())).StartsWith("PERLA_"))
+              nonNull(entry.Key.ToString()).StartsWith("PERLA_"))
             |> Seq.map(fun entry ->
-              (nonNull(entry.Key.ToString())).Replace("PERLA_", ""),
+              nonNull(entry.Key.ToString()).Replace("PERLA_", ""),
               (nonNull entry.Value).ToString() |> nonNull)
             |> Map.ofSeq
             |> AVal.constant
@@ -238,7 +246,6 @@ module FileSystem =
             |> UMX.tag<SystemPath>
 
           try
-            let! token = CancellableTask.getCancellationToken()
             use content = File.OpenRead(UMX.untag path)
             let! descriptions = Json.FromStream<Map<string, string>> content
             return descriptions
@@ -247,8 +254,6 @@ module FileSystem =
         }
 
         member _.ResolveOfflineTemplatesConfig() = cancellableTask {
-          let! token = CancellableTask.getCancellationToken()
-
           let path =
             UMX.untag args.PerlaDirectories.OfflineTemplates
             / "perla.config.json"
@@ -269,20 +274,9 @@ module FileSystem =
           |> Array.Parallel.map(fun path -> path, File.ReadAllText path)
 
         member this.ResolveEsbuildPath() =
-          let bin = if args.PlatformOps.IsWindows() then "" else "bin"
-          let exec = if args.PlatformOps.IsWindows() then ".exe" else ""
-
-          let esbuildVersion =
-            this.PerlaConfiguration |> AVal.map _.esbuild.version |> AVal.force
-
-          args.PerlaDirectories.PerlaArtifactsRoot
-          |/ UMX.untag esbuildVersion
-          |/ "package"
-          |/ bin
-          |/ $"esbuild{exec}"
-          |> UMX.untag
-          |> Path.GetFullPath
-          |> UMX.tag<SystemPath>
+          resolveEsbuildPath
+            (args.PlatformOps, args.PerlaDirectories)
+            (this.PerlaConfiguration |> AVal.map _.esbuild.version |> AVal.force)
 
         member _.ResolveLiveReloadScript() = cancellableTask {
           let! token = CancellableTask.getCancellationToken()
@@ -536,6 +530,14 @@ module FileSystem =
 
           let filesToCopy = pattern |> Seq.toArray
 
+          args.Logger.LogTrace(
+            "Copying files from {Cwd} to {OutDir} with pattern: {Includes} excluding {Excludes}",
+            cwd,
+            outDir,
+            includes,
+            excludes
+          )
+
           let copyAndIncrement (tsk: ProgressTask) (file: string) =
             tsk.Increment 1
             let targetPath = file.Replace(cwd, outDir)
@@ -547,6 +549,12 @@ module FileSystem =
               |> ignore
             with _ ->
               ()
+
+            args.Logger.LogDebug(
+              "Copying {File} -> {TargetPath}",
+              file,
+              targetPath
+            )
 
             File.Copy(file, targetPath, true)
 
@@ -577,20 +585,20 @@ module FileSystem =
               UMX.untag config.envPath
             )
 
-          // ensure the directory exists
-          Directory.CreateDirectory tmpPath |> ignore
+            // ensure the directory exists
+            Directory.CreateDirectory tmpPath |> ignore
 
-          let content =
-            content
-            |> Map.fold
-              (fun (sb: StringBuilder) key value ->
-                sb.AppendLine $"export const {key} = \"{value}\"")
-              (StringBuilder())
-            |> _.ToString()
+            let content =
+              content
+              |> Map.fold
+                (fun (sb: StringBuilder) key value ->
+                  sb.AppendLine $"export const {key} = \"{value}\"")
+                (StringBuilder())
+              |> _.ToString()
 
-          // remove the leading slash
-          let targetFile = (UMX.untag config.envPath)[1..]
+            // remove the leading slash
+            let targetFile = (UMX.untag config.envPath)[1..]
 
-          let path = Path.Combine(tmpPath, targetFile) |> Path.GetFullPath
-          File.WriteAllText(path, content)
+            let path = Path.Combine(tmpPath, targetFile) |> Path.GetFullPath
+            File.WriteAllText(path, content)
     }

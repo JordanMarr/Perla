@@ -1,7 +1,5 @@
 namespace Perla.Tests
 
-open System
-open System.IO
 open Xunit
 open FSharp.UMX
 open Microsoft.Extensions.Logging
@@ -53,7 +51,7 @@ module SuaveServiceTests =
       (resolveFunc: string<ServerUrl> -> FileKind option) =
       interface VirtualFileSystem with
         member _.Resolve(path) = resolveFunc path
-        member _.Load(_) = async { return () }
+        member _.Load _ = async { return () }
         member _.ToDisk(?location) = async { return UMX.tag<SystemPath> "/tmp" }
         member _.FileChanges = failwith "Not implemented for tests"
         member _.Dispose() = ()
@@ -239,7 +237,7 @@ module SuaveServiceTests =
       oldPath = None
     }
 
-    let data = Perla.SuaveService.LiveReload.createReloadEventData event
+    let data = createReloadEventData event
     Assert.Contains("foo.js", data)
     Assert.Contains("name", data)
 
@@ -258,9 +256,10 @@ module SuaveServiceTests =
     let transform: Perla.Plugins.FileTransform = {
       content = "body{}"
       extension = ".css"
+      fileLocation = "/some/path/to/file"
     }
 
-    let data = Perla.SuaveService.LiveReload.createHmrEventData event transform
+    let data = createHmrEventData event transform
     Assert.Contains("foo.css", data)
     Assert.Contains("old.css", data)
     Assert.Contains("body{}", data)
@@ -307,7 +306,7 @@ module VirtualFilesTests =
   let ``processCssAsJs should wrap CSS in JS style injection``() =
     let css = "body { color: red; }"
     let url = "/styles.css"
-    let js = Perla.SuaveService.VirtualFiles.processCssAsJs css url
+    let js = VirtualFiles.processCssAsJs css url
     Assert.Contains("document.createElement('style')", js)
     Assert.Contains(css, js)
     Assert.Contains(url, js)
@@ -315,7 +314,7 @@ module VirtualFilesTests =
   [<Fact>]
   let ``processJsonAsJs should wrap JSON in JS export default``() =
     let json = "{\"foo\":42}"
-    let js = Perla.SuaveService.VirtualFiles.processJsonAsJs json
+    let js = VirtualFiles.processJsonAsJs json
     Assert.StartsWith("export default", js)
     Assert.Contains(json, js)
 
@@ -325,9 +324,9 @@ module VirtualFilesTests =
     let bytes = System.Text.Encoding.UTF8.GetBytes css
 
     let result =
-      Perla.SuaveService.VirtualFiles.determineFileProcessing
+      VirtualFiles.determineFileProcessing
         "text/css"
-        Perla.SuaveService.VirtualFiles.RequestedAs.JS
+        VirtualFiles.RequestedAs.JS
         bytes
         "/styles.css"
 
@@ -342,9 +341,9 @@ module VirtualFilesTests =
     let bytes = System.Text.Encoding.UTF8.GetBytes json
 
     let result =
-      Perla.SuaveService.VirtualFiles.determineFileProcessing
+      VirtualFiles.determineFileProcessing
         "application/json"
-        Perla.SuaveService.VirtualFiles.RequestedAs.JS
+        VirtualFiles.RequestedAs.JS
         bytes
         "/data.json"
 
@@ -361,9 +360,9 @@ module VirtualFilesTests =
     let bytes = System.Text.Encoding.UTF8.GetBytes js
 
     let result =
-      Perla.SuaveService.VirtualFiles.determineFileProcessing
+      VirtualFiles.determineFileProcessing
         "application/javascript"
-        Perla.SuaveService.VirtualFiles.RequestedAs.JS
+        VirtualFiles.RequestedAs.JS
         bytes
         "/app.js"
 
@@ -377,9 +376,9 @@ module VirtualFilesTests =
     let bytes = System.Text.Encoding.UTF8.GetBytes css
 
     let result =
-      Perla.SuaveService.VirtualFiles.determineFileProcessing
+      VirtualFiles.determineFileProcessing
         "text/css"
-        Perla.SuaveService.VirtualFiles.RequestedAs.Normal
+        VirtualFiles.RequestedAs.Normal
         bytes
         "/styles.css"
 

@@ -3,7 +3,6 @@ module Perla.Database
 #nowarn "3391"
 
 open System
-open System.Linq.Expressions
 open LiteDB
 
 open FSharp.UMX

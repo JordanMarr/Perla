@@ -1,6 +1,5 @@
 namespace Perla
 
-open System
 open System.IO
 open System.Text
 open System.Runtime.InteropServices
@@ -8,6 +7,7 @@ open IcedTasks
 open FSharp.UMX
 open Perla.Units
 open Perla.Types
+open Perla.Logger
 open Microsoft.Extensions.Logging
 open CliWrap
 open CliWrap.Buffered
@@ -56,10 +56,10 @@ type PlatformOps =
   abstract IsFableAvailable: unit -> CancellableTask<bool>
 
   abstract RunEsbuildTransform:
+    esbuildPath: string<SystemPath> *
     sourceCode: string *
     loader: string option *
     target: string *
-    minify: bool *
     jsxAutomatic: bool *
     jsxImportSource: string option *
     tsconfig: string option ->
@@ -132,7 +132,6 @@ module PlatformOps =
 
   let private buildEsbuildArguments
     (target: string)
-    (minify: bool)
     (jsxAutomatic: bool)
     (jsxImportSource: string option)
     (tsconfig: string option)
@@ -141,7 +140,6 @@ module PlatformOps =
     fun (args: Builders.ArgumentsBuilder) ->
       let args = args.Add $"--target={target}"
       let args = args.Add "--format=esm"
-      let args = if minify then args.Add "--minify" else args
       let args = if jsxAutomatic then args.Add "--jsx=automatic" else args
 
       let args =
@@ -331,10 +329,10 @@ module PlatformOps =
 
         member _.RunEsbuildTransform
           (
+            esbuildPath,
             sourceCode,
             loader,
             target,
-            minify,
             jsxAutomatic,
             jsxImportSource,
             tsconfig
@@ -345,14 +343,13 @@ module PlatformOps =
 
             let command =
               Cli
-                .Wrap("esbuild")
+                .Wrap(esbuildPath |> UMX.untag)
                 .WithStandardInputPipe(PipeSource.FromString sourceCode)
                 .WithStandardOutputPipe(PipeTarget.ToStream writer)
                 .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
                 .WithArguments(fun args ->
                   buildEsbuildArguments
                     target
-                    minify
                     jsxAutomatic
                     jsxImportSource
                     tsconfig
@@ -361,7 +358,7 @@ module PlatformOps =
                   |> ignore)
                 .WithValidation(CommandResultValidation.None)
 
-            let! result = command.ExecuteAsync(cancellationToken = token)
+            let! _ = command.ExecuteAsync(cancellationToken = token)
             return Encoding.UTF8.GetString(writer.ToArray())
           }
 
@@ -381,12 +378,13 @@ module PlatformOps =
                 .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
                 .WithArguments(fun argsBuilder ->
                   argsBuilder.Add(entrypoint).Add("--bundle")
-                  |> (if minify then fun a -> a.Add("--minify") else id)
-                  |> fun a -> a.Add($"--outdir={outdir}")
+                  |> (if minify then _.Add("--minify") else id)
+                  |> _.Add($"--outdir={outdir}")
+                  |> _.Add("--preserve-symlinks")
                   |> buildEsbuildFileLoaders fileLoaders
                   |> ignore)
 
-            let! result = command.ExecuteAsync(cancellationToken = token)
+            let! _ = command.ExecuteAsync(cancellationToken = token)
             return ()
           }
 
@@ -396,6 +394,15 @@ module PlatformOps =
           cancellableTask {
             let! token = CancellableTask.getCancellationToken()
 
+            logger.LogDebug(
+              "Starting Esbuild for entrypoint '{entrypoint}': cwd: {cwd} - outdir: {outdir}",
+              entrypoint,
+              workingDir,
+              outdir
+            )
+
+            let output = Path.Combine(outdir, entrypoint)
+
             let command =
               Cli
                 .Wrap(esbuildPath |> UMX.untag)
@@ -403,17 +410,24 @@ module PlatformOps =
                 .WithStandardOutputPipe(
                   PipeTarget.ToDelegate logger.LogInformation
                 )
-                .WithStandardErrorPipe(
-                  PipeTarget.ToDelegate logger.LogInformation
-                )
+                .WithStandardErrorPipe(PipeTarget.ToDelegate logger.LogError)
                 .WithArguments(fun argsBuilder ->
-                  argsBuilder.Add(entrypoint)
+                  argsBuilder.Add entrypoint
                   |> buildEsbuildConfig config
-                  |> fun a -> a.Add($"--outdir={outdir}")
+                  |> _.Add($"--outfile={output}")
+                  |> _.Add("--preserve-symlinks")
                   |> buildEsbuildFileLoaders config.fileLoaders
                   |> ignore)
+                .WithValidation
+                CommandResultValidation.None
 
-            let! result = command.ExecuteAsync(cancellationToken = token)
+            logger.LogTrace(
+              "Executing Esbuild command: {Command} {Arguments}",
+              command.TargetFilePath,
+              command.Arguments
+            )
+
+            let! _ = command.ExecuteAsync(cancellationToken = token)
             return ()
           }
     }

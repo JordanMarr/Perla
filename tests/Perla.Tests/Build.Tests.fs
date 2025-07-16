@@ -1,11 +1,9 @@
 module Perla.Tests.Build
 
-open System
 open Microsoft.Extensions.Logging
 open Xunit
 open FSharp.UMX
 open AngleSharp
-open AngleSharp.Html.Dom
 open AngleSharp.Html.Parser
 
 open Perla
@@ -36,7 +34,7 @@ module TestHelpers =
     parser.ParseDocument("<html><head></head><body></body></html>")
 
   let createBasicConfig() = {
-    Perla.Defaults.PerlaConfig with
+    Defaults.PerlaConfig with
         enableEnv = true
         build = {
           Defaults.BuildConfig with
@@ -138,7 +136,7 @@ module EntryPointsTests =
     let document = createDocument(html)
 
     // Act
-    let (cssBundles, _, _) = Build.EntryPoints(document)
+    let cssBundles, _, _ = Build.EntryPoints(document)
     let cssUrls = cssBundles |> Seq.map UMX.untag |> Seq.toList
 
     // Assert
@@ -160,7 +158,7 @@ module EntryPointsTests =
     let document = createDocument(html)
 
     // Act
-    let (_, htmlBundles, _) = Build.EntryPoints(document)
+    let _, htmlBundles, _ = Build.EntryPoints(document)
     let jsUrls = htmlBundles |> Seq.map UMX.untag |> Seq.toList
 
     // Assert
@@ -182,7 +180,7 @@ module EntryPointsTests =
     let document = createDocument(html)
 
     // Act
-    let (_, _, standaloneBundles) = Build.EntryPoints(document)
+    let _, _, standaloneBundles = Build.EntryPoints(document)
     let standaloneUrls = standaloneBundles |> Seq.map UMX.untag |> Seq.toList
 
     // Assert
@@ -206,7 +204,7 @@ module EntryPointsTests =
     let document = createDocument(html)
 
     // Act
-    let (cssBundles, htmlBundles, standaloneBundles) =
+    let cssBundles, htmlBundles, standaloneBundles =
       Build.EntryPoints(document)
 
     // Assert
@@ -345,7 +343,7 @@ module IndexTests =
     ]
 
     // Act
-    let result = Build.Index(document, importMap, jsExtras, cssExtras)
+    let _ = Build.Index(document, importMap, jsExtras, cssExtras)
 
     // Assert
     let cssLinks = document.QuerySelectorAll("link[rel=stylesheet]")
@@ -362,7 +360,7 @@ module IndexTests =
     let cssExtras = []
 
     // Act
-    let result = Build.Index(document, importMap, jsExtras, cssExtras)
+    let _ = Build.Index(document, importMap, jsExtras, cssExtras)
 
     // Assert
     let importMapScript = document.QuerySelector("script[type=importmap]")
@@ -384,7 +382,7 @@ module IndexTests =
     let cssExtras = []
 
     // Act
-    let result = Build.Index(document, importMap, jsExtras, cssExtras)
+    let _ = Build.Index(document, importMap, jsExtras, cssExtras)
 
     // Assert
     let scripts =
@@ -410,7 +408,7 @@ module IndexTests =
     let cssExtras = [ UMX.tag<ServerUrl> "/css/new-style.css" ]
 
     // Act
-    let result = Build.Index(document, importMap, jsExtras, cssExtras)
+    let _ = Build.Index(document, importMap, jsExtras, cssExtras)
 
     // Assert
     Assert.Null(document.QuerySelector("[data-entry-point][rel=stylesheet]"))
@@ -469,7 +467,7 @@ module IndexTests =
     ]
 
     // Act
-    let result = Build.Index(document, importMap, jsExtras, cssExtras)
+    let _ = Build.Index(document, importMap, jsExtras, cssExtras)
 
     // Assert
     let cssLinks = document.QuerySelectorAll("link[rel=stylesheet]")
@@ -493,7 +491,7 @@ module IndexTests =
     let cssExtras = []
 
     // Act
-    let result = Build.Index(document, importMap, jsExtras, cssExtras)
+    let _ = Build.Index(document, importMap, jsExtras, cssExtras)
 
     // Assert
     let allScripts = document.QuerySelectorAll("script")

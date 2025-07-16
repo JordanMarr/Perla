@@ -15,15 +15,15 @@ exception DecodingException of DecodeError
 type JspmService =
   abstract member Install:
     options: IDictionary<string, obj> * ?cancellationToken: CancellationToken ->
-      Task<GeneratorResponse>
+      Task<GeneratorResponseKind>
 
   abstract member Update:
     options: IDictionary<string, obj> * ?cancellationToken: CancellationToken ->
-      Task<GeneratorResponse>
+      Task<GeneratorResponseKind>
 
   abstract member Uninstall:
     options: IDictionary<string, obj> * ?cancellationToken: CancellationToken ->
-      Task<GeneratorResponse>
+      Task<GeneratorResponseKind>
 
   abstract member Download:
     packages: string *
@@ -74,7 +74,9 @@ module JspmService =
 
           let! responseStream = Response.toStreamTAsync token req
 
-          match! Decoding.auto(responseStream, jsonOptions) with
+          match!
+            Decoding.auto<GeneratorResponseKind>(responseStream, jsonOptions)
+          with
           | Ok response -> return response
           | Error error -> return raise(DecodingException error)
         }

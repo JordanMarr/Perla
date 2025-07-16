@@ -2,14 +2,12 @@
 
 open System
 open System.Threading.Tasks
-open System.Threading
 open Microsoft.Playwright
 open Microsoft.Extensions.Logging
 
 open Perla
 open Perla.Logger
 open Perla.Types
-open Perla.FileSystem
 
 open FSharp.Control
 open FSharp.Control.Reactive
@@ -451,7 +449,7 @@ type Testing =
       let! page =
         iBrowser.NewPageAsync(BrowserNewPageOptions(IgnoreHTTPSErrors = true))
 
-      use _ = Testing.monitorPageLogs page
+      use _ = monitorPageLogs page
 
       do! page.GotoAsync url :> Task
 
@@ -478,7 +476,7 @@ type Testing =
       let! page =
         iBrowser.NewPageAsync(BrowserNewPageOptions(IgnoreHTTPSErrors = true))
 
-      let monitor = Testing.monitorPageLogs page
+      let monitor = monitorPageLogs page
 
       do! page.GotoAsync url :> Task
 
@@ -682,7 +680,7 @@ module PlaywrightService =
 module TestReportPrinter =
 
   let Create(args: TestReportPrinterArgs) : TestReportPrinter =
-    let logger = args.Logger
+    let _ = args.Logger
 
     { new TestReportPrinter with
         member _.PrintTest(test, ?error) = Print.Test(test, ?error = error)
@@ -703,7 +701,7 @@ module TestingService =
   let Create(args: TestingServiceArgs) : TestingService =
     let logger = args.Logger
     let playwrightService = args.PlaywrightService
-    let reportPrinter = args.ReportPrinter
+    let _ = args.ReportPrinter
 
     { new TestingService with
         member _.SetupPlaywright() = playwrightService.InstallBrowsers()
@@ -711,9 +709,9 @@ module TestingService =
         member _.GetBrowser(browser, headless) =
           playwrightService.LaunchBrowser(browser, headless)
 
-        member _.BuildReport(events) = Testing.BuildReport events
+        member _.BuildReport(events) = BuildReport events
 
-        member _.PrintReportLive(events) = Testing.PrintReportLive events
+        member _.PrintReportLive(events) = PrintReportLive events
 
         member _.RunOnce
           (browsers, browserMode, headless, serverUrl, ?fileGlobs)
@@ -732,7 +730,7 @@ module TestingService =
             try
               match browserMode with
               | BrowserMode.Parallel ->
-                let! results =
+                let! _ =
                   browsers
                   |> Seq.map(fun browser -> cancellableTask {
                     let! browserInstance =
@@ -761,7 +759,7 @@ module TestingService =
                       browserInstance.CloseAsync() |> ignore
 
               // Return results - this would integrate with actual test event collection
-              return Testing.BuildReport []
+              return BuildReport []
 
             with ex ->
               logger.LogError(ex, "Error during test execution")
@@ -808,7 +806,7 @@ module TestingService =
                     (serverUrl, browser, fileChanges)
                     browserInstance
 
-                use subscription =
+                use _ =
                   observable.Subscribe(fun _ ->
                     logger.LogInformation(
                       "Test files reloaded due to file changes"
@@ -818,7 +816,7 @@ module TestingService =
                   do! Task.Delay(1000, token)
 
                 logger.LogInformation("Test watch mode stopped")
-                return Testing.BuildReport []
+                return BuildReport []
 
               finally
                 logger.LogInformation("Closing browser instance")

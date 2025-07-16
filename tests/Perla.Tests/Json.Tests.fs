@@ -31,8 +31,8 @@ let ``Json.ToBytes and Json.FromBytes should be symmetric``() =
 
   // We can't directly compare the objects, but we can check the properties
   let resultNode = Json.ToNode(result)
-  Assert.Equal("Test", resultNode.["Name"].GetValue<string>())
-  Assert.Equal(42, resultNode.["Value"].GetValue<int>())
+  Assert.Equal("Test", resultNode["Name"].GetValue<string>())
+  Assert.Equal(42, resultNode["Value"].GetValue<int>())
 
 [<Fact>]
 let ``Json.ToText should serialize correctly``() =
@@ -53,8 +53,8 @@ let ``Json.ToNode should convert to JsonNode``() =
   let testObj = {| Name = "Test"; Value = 42 |}
   let node = Json.ToNode(testObj)
   Assert.NotNull(node)
-  Assert.Equal("Test", node.["Name"].GetValue<string>())
-  Assert.Equal(42, node.["Value"].GetValue<int>())
+  Assert.Equal("Test", node["Name"].GetValue<string>())
+  Assert.Equal(42, node["Value"].GetValue<int>())
 
 [<Fact>]
 let ``PerlaConfigSection should have correct discriminated union cases``() =
@@ -454,8 +454,8 @@ let ``PerlaConfig.UpdateFileFields should update provider correctly``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["provider"])
-  Assert.Equal("jspm.io", result.["provider"].GetValue<string>())
+  Assert.NotNull(result["provider"])
+  Assert.Equal("jspm.io", result["provider"].GetValue<string>())
 
 [<Fact>]
 let ``PerlaConfig.UpdateFileFields should update dependencies correctly``() =
@@ -477,10 +477,10 @@ let ``PerlaConfig.UpdateFileFields should update dependencies correctly``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["dependencies"])
-  let depsObj = result.["dependencies"].AsObject()
-  Assert.Equal("^10.11.0", depsObj.["preact"].GetValue<string>())
-  Assert.Equal("^1.0.0", depsObj.["preact/hooks"].GetValue<string>())
+  Assert.NotNull(result["dependencies"])
+  let depsObj = result["dependencies"].AsObject()
+  Assert.Equal("^10.11.0", depsObj["preact"].GetValue<string>())
+  Assert.Equal("^1.0.0", depsObj["preact/hooks"].GetValue<string>())
 
 [<Fact>]
 let ``PerlaConfig.UpdateFileFields should update useLocalPkgs correctly``() =
@@ -489,8 +489,8 @@ let ``PerlaConfig.UpdateFileFields should update useLocalPkgs correctly``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["useLocalPkgs"])
-  Assert.True(result.["useLocalPkgs"].GetValue<bool>())
+  Assert.NotNull(result["useLocalPkgs"])
+  Assert.True(result["useLocalPkgs"].GetValue<bool>())
 
 [<Fact>]
 let ``PerlaConfig.UpdateFileFields should update fable fields correctly``() =
@@ -507,12 +507,12 @@ let ``PerlaConfig.UpdateFileFields should update fable fields correctly``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["fable"])
-  let fableObj = result.["fable"].AsObject()
-  Assert.Equal("./src/App.fsproj", fableObj.["project"].GetValue<string>())
-  Assert.Equal(".fs", fableObj.["extension"].GetValue<string>())
-  Assert.True(fableObj.["sourceMaps"].GetValue<bool>())
-  Assert.True(fableObj.["outDir"].GetValue<bool>())
+  Assert.NotNull(result["fable"])
+  let fableObj = result["fable"].AsObject()
+  Assert.Equal("./src/App.fsproj", fableObj["project"].GetValue<string>())
+  Assert.Equal(".fs", fableObj["extension"].GetValue<string>())
+  Assert.True(fableObj["sourceMaps"].GetValue<bool>())
+  Assert.True(fableObj["outDir"].GetValue<bool>())
 
 [<Fact>]
 let ``PerlaConfig.UpdateFileFields should update paths correctly``() =
@@ -530,17 +530,17 @@ let ``PerlaConfig.UpdateFileFields should update paths correctly``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["paths"])
-  let pathsObj = result.["paths"].AsObject()
+  Assert.NotNull(result["paths"])
+  let pathsObj = result["paths"].AsObject()
 
   Assert.Equal(
     "https://esm.sh/preact@10.11.0",
-    pathsObj.["preact"].GetValue<string>()
+    pathsObj["preact"].GetValue<string>()
   )
 
   Assert.Equal(
     "https://esm.sh/preact@10.11.0/hooks",
-    pathsObj.["preact/hooks"].GetValue<string>()
+    pathsObj["preact/hooks"].GetValue<string>()
   )
 
 [<Fact>]
@@ -550,8 +550,8 @@ let ``PerlaConfig.UpdateFileFields should add schema when not present``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["$schema"])
-  Assert.Contains("perla.schema.json", result.["$schema"].GetValue<string>())
+  Assert.NotNull(result["$schema"])
+  Assert.Contains("perla.schema.json", result["$schema"].GetValue<string>())
 
 [<Fact>]
 let ``PerlaConfig.UpdateFileFields should preserve existing schema``() =
@@ -561,8 +561,8 @@ let ``PerlaConfig.UpdateFileFields should preserve existing schema``() =
 
   let result = PerlaConfig.UpdateFileFields (Some originalJson) fields
 
-  Assert.NotNull(result.["$schema"])
-  Assert.Equal("custom-schema.json", result.["$schema"].GetValue<string>())
+  Assert.NotNull(result["$schema"])
+  Assert.Equal("custom-schema.json", result["$schema"].GetValue<string>())
 
 [<Fact>]
 let ``PerlaConfig.UpdateFileFields should handle None jsonContents``() =
@@ -570,9 +570,9 @@ let ``PerlaConfig.UpdateFileFields should handle None jsonContents``() =
 
   let result = PerlaConfig.UpdateFileFields None fields
 
-  Assert.NotNull(result.["$schema"])
-  Assert.NotNull(result.["useLocalPkgs"])
-  Assert.True(result.["useLocalPkgs"].GetValue<bool>())
+  Assert.NotNull(result["$schema"])
+  Assert.NotNull(result["useLocalPkgs"])
+  Assert.True(result["useLocalPkgs"].GetValue<bool>())
 
 // Tests for TemplateDecoders
 [<Fact>]
@@ -744,7 +744,7 @@ let ``TestDecoders.Suite should decode correctly``() =
     Assert.Equal(Some "parent-suite", suite.parent)
     Assert.False(suite.pending)
     Assert.Equal(1, suite.tests.Length)
-    Assert.Equal("test-1", suite.tests.[0].id)
+    Assert.Equal("test-1", suite.tests[0].id)
   | Error error -> Assert.True(false, $"Expected Ok but got Error: {error}")
 
 // Tests for internal ConfigEncoders

@@ -2,7 +2,6 @@
 
 open System.Threading.Tasks
 open Spectre.Console
-open Spectre.Console.Extensions
 open System
 open System.Runtime.InteropServices
 open Serilog
@@ -212,25 +211,22 @@ type PerlaPrefixEnricher(prefixes: PrefixKind Set) =
       for prefix in prefixes do
         match prefix with
         | Log ->
-          propertyFactory.CreateProperty($"PlLog", Constants.LogPrefix)
+          propertyFactory.CreateProperty("PlLog", Constants.LogPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Scaffold ->
-          propertyFactory.CreateProperty(
-            $"PlScaffold",
-            Constants.ScaffoldPrefix
-          )
+          propertyFactory.CreateProperty("PlScaffold", Constants.ScaffoldPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Build ->
-          propertyFactory.CreateProperty($"PlBuild", Constants.BuildPrefix)
+          propertyFactory.CreateProperty("PlBuild", Constants.BuildPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Serve ->
-          propertyFactory.CreateProperty($"PlServe", Constants.ServePrefix)
+          propertyFactory.CreateProperty("PlServe", Constants.ServePrefix)
           |> logEvent.AddPropertyIfAbsent
         | Esbuild ->
-          propertyFactory.CreateProperty($"PlEsbuild", Constants.EsbuildPrefix)
+          propertyFactory.CreateProperty("PlEsbuild", Constants.EsbuildPrefix)
           |> logEvent.AddPropertyIfAbsent
         | Browser ->
-          propertyFactory.CreateProperty($"PlBrowser", Constants.BrowserPrefix)
+          propertyFactory.CreateProperty("PlBrowser", Constants.BrowserPrefix)
           |> logEvent.AddPropertyIfAbsent
 
 // Custom sink to write to Spectre.Console
@@ -303,14 +299,38 @@ module SerilogExtensions =
 
 [<RequireQualifiedAccess>]
 module PerlaSeriLogger =
-  let create(prefixes: PrefixKind Set) =
+  type LoggerConfiguration with
+    member config.SetLevel(logLevel: Microsoft.Extensions.Logging.LogLevel) =
+      match logLevel with
+      | Microsoft.Extensions.Logging.LogLevel.Trace ->
+        config.MinimumLevel.Verbose()
+      | Microsoft.Extensions.Logging.LogLevel.Debug ->
+        config.MinimumLevel.Debug()
+      | Microsoft.Extensions.Logging.LogLevel.Information ->
+        config.MinimumLevel.Information()
+      | Microsoft.Extensions.Logging.LogLevel.Warning ->
+        config.MinimumLevel.Warning()
+      | Microsoft.Extensions.Logging.LogLevel.Error ->
+        config.MinimumLevel.Error()
+      | Microsoft.Extensions.Logging.LogLevel.Critical ->
+        config.MinimumLevel.Fatal()
+      | Microsoft.Extensions.Logging.LogLevel.None
+      | _ -> config
+
+  let create
+    (
+      prefixes: PrefixKind Set,
+      logLevel: Microsoft.Extensions.Logging.LogLevel option
+    ) =
+    let logLevel =
+      defaultArg logLevel Microsoft.Extensions.Logging.LogLevel.None
+
     LoggerConfiguration()
       .Enrich.WithPerlaPrefix(prefixes)
       .Enrich.FromLogContext()
       .WriteTo.Spectre()
+      .SetLevel(logLevel)
       .CreateLogger()
-
-  let createFromConfig(config: LoggerConfiguration) = config.CreateLogger()
 
 open Microsoft.Extensions.Logging
 open Serilog.Extensions.Logging
@@ -319,7 +339,7 @@ open Serilog.Extensions.Logging
 module ILoggerExtensions =
   open Serilog.Context
 
-  type Microsoft.Extensions.Logging.ILogger with
+  type ILogger with
 
 
     member _.Spinner<'Operation>
@@ -372,7 +392,9 @@ module ILoggerExtensions =
       this.Log(logLevel, message, args)
 
   type ILoggingBuilder with
-    member this.AddPerlaLogger(?prefixes: PrefixKind list) =
+    member this.AddPerlaLogger
+      (?logLevel: LogLevel, ?prefixes: PrefixKind list)
+      =
       let prefixes = defaultArg prefixes [ Log ]
-      let serilogLogger = PerlaSeriLogger.create(Set.ofList prefixes)
+      let serilogLogger = PerlaSeriLogger.create(Set.ofList prefixes, logLevel)
       this.AddProvider(new SerilogLoggerProvider(serilogLogger))

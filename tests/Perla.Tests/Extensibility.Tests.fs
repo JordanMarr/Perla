@@ -1,14 +1,10 @@
 module Perla.Tests.Extensibility
 
-open System
-open System.IO
-open System.Threading.Tasks
 open Microsoft.Extensions.Logging
 open Xunit
 open IcedTasks
 
 open Perla.Plugins
-open Perla.Plugins.Registry
 open Perla.Extensibility
 open Perla.Logger
 
@@ -91,7 +87,7 @@ module PluginLoadingTests =
     match result with
     | Ok plugins ->
       Assert.Single(plugins) |> ignore
-      Assert.Equal("esbuild-plugin", plugins.[0].name)
+      Assert.Equal("esbuild-plugin", plugins[0].name)
     | Error err -> Assert.Fail($"Expected success, but got error: {err}")
   }
 
@@ -123,7 +119,7 @@ module PluginRetrievalTests =
     let plugins = service.GetAllPlugins()
 
     Assert.Single(plugins) |> ignore
-    Assert.Equal("test-plugin", plugins.[0].name)
+    Assert.Equal("test-plugin", plugins[0].name)
   }
 
   [<Fact>]
@@ -141,8 +137,8 @@ module PluginRetrievalTests =
     let runnablePlugins = service.GetRunnablePlugins([ "plugin2"; "plugin1" ])
 
     Assert.Equal(2, runnablePlugins.Length)
-    Assert.Equal("plugin2", runnablePlugins.[0].plugin.name)
-    Assert.Equal("plugin1", runnablePlugins.[1].plugin.name)
+    Assert.Equal("plugin2", runnablePlugins[0].plugin.name)
+    Assert.Equal("plugin1", runnablePlugins[1].plugin.name)
   }
 
   [<Fact>]
@@ -171,6 +167,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "unchanged"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [] inputFile
@@ -190,6 +187,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "original content"
       extension = ".js"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [ "js-plugin" ] inputFile
@@ -206,6 +204,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "test content"
       extension = ".js"
+      fileLocation = "/some/path/to/file"
     }
 
     // Try to run a plugin that doesn't exist
@@ -227,6 +226,7 @@ module PluginExecutionTests =
     let inputFile = {
       content = "should not change"
       extension = ".css" // Different extension
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [ "js-plugin" ] inputFile
@@ -260,7 +260,7 @@ module IntegrationTests =
     match result with
     | Ok plugins ->
       Assert.Single(plugins) |> ignore
-      Assert.Equal("esbuild", plugins.[0].name)
+      Assert.Equal("esbuild", plugins[0].name)
 
       // Test that HasPluginsForExtension works
       Assert.True(service.HasPluginsForExtension(".ts"))
@@ -270,6 +270,7 @@ module IntegrationTests =
       let inputFile = {
         content = "const x: number = 42;"
         extension = ".ts"
+        fileLocation = "/some/path/to/file"
       }
 
       let! transformedFile = service.RunPlugins [ "esbuild" ] inputFile
@@ -301,6 +302,7 @@ module IntegrationTests =
     let inputFile = {
       content = "original"
       extension = ".txt"
+      fileLocation = "/some/path/to/file"
     }
 
     let! result = service.RunPlugins [ "plugin1"; "plugin2" ] inputFile
@@ -324,5 +326,5 @@ module ErrorHandlingTests =
 
     match result with
     | Ok _ -> Assert.Fail("Expected error for invalid script")
-    | Error err -> Assert.True(true) // Expected error
+    | Error _ -> Assert.True(true) // Expected error
   }

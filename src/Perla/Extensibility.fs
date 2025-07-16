@@ -85,12 +85,13 @@ module ExtensibilityService =
             logger.LogInformation($"Loaded default plugin: {plugin.name}")
 
           // Load plugins from files
-          let! loadResults =
+          do!
             pluginFiles
             |> Array.traverseResultM(fun (path, content) ->
               pluginManager.LoadFromText(path, content))
             |> Result.teeError(fun (error: PluginLoadError) ->
               logger.LogError("Failure to load a plugin: {error}", error))
+            |> Result.ignore
 
           // Return all loaded plugins
           return pluginManager.GetAllPlugins()
@@ -101,8 +102,8 @@ module ExtensibilityService =
         member _.GetRunnablePlugins(order) =
           pluginManager.GetRunnablePlugins(order)
 
-        member _.RunPlugins (pluginOrder) (fileInput) =
-          pluginManager.RunPlugins (pluginOrder) fileInput
+        member _.RunPlugins pluginOrder fileInput =
+          pluginManager.RunPlugins pluginOrder fileInput
 
         member _.HasPluginsForExtension(extension) =
           pluginManager.HasPluginsForExtension(extension)

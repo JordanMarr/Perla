@@ -1,6 +1,5 @@
 module Perla.Plugins.Tests.Library
 
-open System
 open System.Threading.Tasks
 
 open Xunit
@@ -14,7 +13,11 @@ let ``"plugin" can be made with a synchronous function``() = taskUnit {
     with_transform(fun file -> { file with content = "transformed" })
   }
 
-  let file = { extension = ".txt"; content = "test" }
+  let file = {
+    extension = ".txt"
+    content = "test"
+    fileLocation = "/some/path/to/file"
+  }
 
   Assert.Equal("plugin", plugin.name)
 
@@ -37,7 +40,11 @@ let ``"plugin" can be made with an asynchronous function that returns a task``
       })
     }
 
-    let file = { extension = ".txt"; content = "test" }
+    let file = {
+      extension = ".txt"
+      content = "test"
+      fileLocation = "/some/path/to/file"
+    }
 
     Assert.Equal("plugin", plugin.name)
 
@@ -60,7 +67,11 @@ let ``"plugin" can be made with an asynchronous function that returns an async``
       })
     }
 
-    let file = { extension = ".txt"; content = "test" }
+    let file = {
+      extension = ".txt"
+      content = "test"
+      fileLocation = "/some/path/to/file"
+    }
 
     Assert.Equal("plugin", plugin.name)
 
@@ -82,7 +93,11 @@ let ``"plugin" can be made with an asynchronous function that returns a valuetas
       })
     }
 
-    let file = { extension = ".txt"; content = "test" }
+    let file = {
+      extension = ".txt"
+      content = "test"
+      fileLocation = "/some/path/to/file"
+    }
 
     Assert.Equal("plugin", plugin.name)
 
@@ -100,7 +115,11 @@ let ``"plugin" should process a file if the predicate is true``() =
     with_transform(fun file -> { file with content = "transformed" })
   }
 
-  let file = { extension = ".txt"; content = "test" }
+  let file = {
+    extension = ".txt"
+    content = "test"
+    fileLocation = "/some/path/to/file"
+  }
 
   match plugin.shouldProcessFile with
   | ValueSome shouldProcessFile ->
@@ -118,6 +137,7 @@ let ``"plugin" should not process a file if the predicate is false``() =
   let file = {
     extension = ".json"
     content = "test"
+    fileLocation = "/some/path/to/file"
   }
 
   match plugin.shouldProcessFile with

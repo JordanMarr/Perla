@@ -4,9 +4,7 @@ open System.IO
 open System.IO.Compression
 open System.Formats.Tar
 open Microsoft.Extensions.Logging
-open Perla.Types
 open Perla.Units
-open Perla
 open Perla
 open FsHttp
 open IcedTasks
@@ -18,7 +16,7 @@ type RequestHandler =
 
   abstract DownloadTemplate:
     user: string * repository: string<Repository> * branch: string<Branch> ->
-      CancellableTask<System.IO.Stream>
+      CancellableTask<Stream>
 
 type RequestHandlerArgs = {
   Logger: ILogger

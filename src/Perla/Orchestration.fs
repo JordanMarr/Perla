@@ -10,7 +10,6 @@ open FSharp.Data.Adaptive
 
 open Perla
 open Perla.Types
-open Perla
 open Perla.RequestHandler
 open Perla.FileSystem
 open Perla.Database
@@ -145,34 +144,35 @@ module Warmup =
 
         logger.LogInformation "Installing templates..."
 
-        let user, repo, branch =
-          (parseFullRepositoryName(Some Constants.Default_Templates_Repository))
-            .Value
+        match Some Constants.Default_Templates_Repository with
+        | FullRepositoryName(user, repo, branch) ->
+          let! values =
+            pfsm.SetupTemplate (user, UMX.tag repo, UMX.tag branch) token
 
-        let! values =
-          pfsm.SetupTemplate (user, UMX.tag repo, UMX.tag branch) token
+          match values with
+          | None ->
+            logger.LogError
+              "Failed to install templates, please try again, if this keeps happening please report this issue."
+            // If we fail to install templates we can't continue
+            return! Error TemplatesFailed
+          | Some(targetPath, decoded) ->
+            logger.LogInformation "Successfully installed templates."
 
-        match values with
-        | None ->
-          logger.LogError
-            "Failed to install templates, please try again, if this keeps happening please report this issue."
-          // If we fail to install templates we can't continue
+            db.Templates.Add(
+              targetPath,
+              decoded,
+              user,
+              UMX.tag repo,
+              UMX.tag branch
+            )
+            |> ignore
+
+            db.Checks.SaveTemplatesPresent() |> ignore
+            logger.LogInformation "Templates saved to database."
+            return! Ok()
+        | _ ->
+          logger.LogError "Failed to parse default templates repository."
           return! Error TemplatesFailed
-        | Some(targetPath, decoded) ->
-          logger.LogInformation "Successfully installed templates."
-
-          db.Templates.Add(
-            targetPath,
-            decoded,
-            user,
-            UMX.tag repo,
-            UMX.tag branch
-          )
-          |> ignore
-
-          db.Checks.SaveTemplatesPresent() |> ignore
-          logger.LogInformation "Templates saved to database."
-          return! Ok()
       }
 
     let fableSetup(pfsm: PerlaFsManager, logger: ILogger) = cancellableTaskResult {
@@ -284,6 +284,9 @@ type HasConfiguration =
 type HasPkgManager =
   abstract member PkgManager: PkgManager
 
+type HasBuildService =
+  abstract member BuildService: Perla.Build.BuildService
+
 [<Interface>]
 type AppContainer =
   inherit HasLogger
@@ -299,6 +302,7 @@ type AppContainer =
   inherit HasConfiguration
   inherit HasPkgManager
   inherit HasRequestHandler
+  inherit HasBuildService
 
 type AppContainerArgs = {
   Logger: ILogger
@@ -356,7 +360,7 @@ module AppContainer =
       }
 
     let templateService =
-      Scaffolding.Create {
+      Create {
         PerlaFsManager = fsManager
         Database = database
       }
@@ -399,6 +403,17 @@ module AppContainer =
         member _.Configuration = configurationManager
         member _.PkgManager = pkgManager
         member _.RequestHandler = requestHandler
+
+        member _.BuildService =
+          Perla.Build.BuildService.Create {
+            Logger = logger
+            FsManager = fsManager
+            EsbuildService = esbuildService
+            ExtensibilityService = extensibilityService
+            VirtualFileSystem = virtualFileSystem
+            FableService = fableService
+            Directories = directories
+          }
     }
 
 [<AutoOpen>]

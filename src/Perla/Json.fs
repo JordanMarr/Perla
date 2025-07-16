@@ -4,8 +4,6 @@ open System
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Text.Json.Nodes
-open System.Threading
-open System.Threading.Tasks
 
 open FsToolkit.ErrorHandling
 open IcedTasks
@@ -349,6 +347,7 @@ let DefaultJsonOptions() =
   )
   |> Codec.useDecoder TestEventDecoder
   |> Codec.useDecoder PkgManager.DownloadResponse.Decoder
+  |> Codec.useDecoder PkgManager.GeneratorResponse.Decoder
   |> Codec.useDecoder DecodedTemplateConfigItemDecoder
   |> Codec.useCodec(Encoders.Browser, BrowserDecoder)
   |> Codec.useCodec(Encoders.BrowserMode, BrowserModeDecoder)
@@ -421,11 +420,11 @@ type Json =
     //   message?: string
     //   stack?: string }
     try
-      use jsonDocument = System.Text.Json.JsonDocument.Parse value
+      use jsonDocument = JsonDocument.Parse value
       let jsonElement = jsonDocument.RootElement
       TestEventDecoder jsonElement
     with ex ->
-      let dummyElement = System.Text.Json.JsonDocument.Parse("{}").RootElement
+      let dummyElement = JsonDocument.Parse("{}").RootElement
 
       Error {
         value = dummyElement

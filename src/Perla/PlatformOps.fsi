@@ -48,10 +48,10 @@ type PlatformOps =
   abstract IsFableAvailable: unit -> CancellableTask<bool>
 
   abstract RunEsbuildTransform:
+    esbuildPath: string<SystemPath> *
     sourceCode: string *
     loader: string option *
     target: string *
-    minify: bool *
     jsxAutomatic: bool *
     jsxImportSource: string option *
     tsconfig: string option ->

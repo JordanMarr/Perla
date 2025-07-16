@@ -1,5 +1,6 @@
 namespace Perla
 
+open System.Text.RegularExpressions
 open FSharp.UMX
 open FSharp.Data.Adaptive
 open Perla.Types
@@ -8,8 +9,20 @@ open Perla.PkgManager
 open Perla.Plugins.Plugin
 
 module ImportMaps =
+  // Checks if a path is a relative path (starts with ./ or ../ or similar patterns)
+  let isRelativePath(path: string) =
+    // Normalize separators to forward slashes for consistency
+    let path = path.Replace('\\', '/')
 
-  open System.Text.RegularExpressions
+    // Check if the path is not rooted (absolute)
+    not(System.IO.Path.IsPathRooted(path))
+    &&
+    // Optionally check that it doesn't start with Windows-style drive letter (C:\ or C:/)
+    not(Regex.IsMatch(path, @"^[a-zA-Z]:[/\\]"))
+    &&
+    // Basic sanity check that it's not empty or whitespace
+    not(System.String.IsNullOrWhiteSpace(path))
+
 
   let withPaths
     (paths: Map<string<BareImport>, string<ResolutionUrl>>)
@@ -31,101 +44,172 @@ module ImportMaps =
       config
       map
 
-  /// Extracts all module names from import statements in the given JS/TS code.
-  /// Returns a list of the module names as strings.
-  let extractImportModuleNames(code: string) : string list =
-    let patterns = [
-      "import\\s+(.+?)\\s+from\\s+['\"]([^'\"]+)['\"]" // import ... from "module" (more permissive)
-      "import\\s+['\"]([^'\"]+)['\"]" // import "module"
-      "import\\s*\\(\\s*['\"]([^'\"]+)['\"]" // import("module")
-    ]
+  let cleanupLocalPaths
+    (paths: Map<string<BareImport>, string<ResolutionUrl>>)
+    (importMap: ImportMap)
+    : ImportMap =
+    {
+      importMap with
+          imports =
+            paths
+            |> Map.fold
+              (fun acc k v ->
+                if isRelativePath(UMX.untag v) then
+                  acc
+                else
 
-    patterns
-    |> List.collect(fun pattern ->
-      Regex.Matches(code, pattern)
-      |> Seq.cast<Match>
-      |> Seq.choose(fun m ->
-        // Try to get the last non-empty group (module name)
-        m.Groups
-        |> Seq.cast<Group>
-        |> Seq.skip 1
-        |> Seq.map(fun g -> g.Value)
-        |> Seq.filter(fun v -> not(System.String.IsNullOrWhiteSpace v))
-        |> Seq.tryLast)
-      |> Seq.toList)
+                Map.add (UMX.untag k) (UMX.untag v) acc)
+              importMap.imports
+    }
 
   /// Replaces module names in import statements using the provided paths map.
-  /// For each module name found in the code, if it exists in the map, replaces it with the mapped value.
-  let replaceFromPaths
+  /// Returns the modified code string with replacements applied.
+  let replaceImports
     (paths: Map<string<BareImport>, string<ResolutionUrl>>)
+    (importingFile: string)
+    (sourcesRoot: string<SystemPath>)
     (content: string)
     : string =
-    let sortedKeys = paths |> Map.toList
+    let pattern =
+      "import\\s+(?:.+?\\s+from\\s+['\"]([^'\"]+)['\"]|['\"]([^'\"]+)['\"])|import\\s*\\(\\s*(['\"])([^'\"]+)\\3\\s*([,)])"
 
-    // Patterns: (pattern, groupIdx for module name)
-    let patterns = [
-      // import ... from 'module' or "module"
-      "(import\\s+.+?\\s+from\\s+['\"])([^'\"]+)(['\"])", 2
-      // import 'module' or "module"
-      "(import\\s+['\"])([^'\"]+)(['\"])", 2
-      // import('module') or import('module', ...)
-      // This matches import('module') and import('module', ...)
-      "(import\\s*\\(\\s*['\"])([^'\"]+)(['\"])(\s*(,|\)))", 2
-    ]
+    let extractModuleName(m: System.Text.RegularExpressions.Match) : string =
+      if m.Groups[1].Success then m.Groups[1].Value
+      elif m.Groups[2].Success then m.Groups[2].Value
+      elif m.Groups[4].Success then m.Groups[4].Value
+      else ""
 
-    // For each pattern, replace all matches in the content
-    let replaced =
-      patterns
-      |> List.fold
-        (fun acc (pattern, groupIdx) ->
-          Regex.Replace(
-            acc,
-            pattern,
-            fun (m: Match) ->
-              let before = m.Groups.[1].Value
-              let moduleName = m.Groups.[groupIdx].Value
-              let after = m.Groups.[groupIdx + 1].Value
+    let computeRelativeImport
+      (importingDir: string)
+      (replacementStr: string)
+      (rest: string)
+      : string =
+      let target =
+        if replacementStr.StartsWith("./") then
+          replacementStr.Substring(2)
+        elif replacementStr.StartsWith("../") then
+          replacementStr
+        else
+          replacementStr
+      // Compute absolute paths
+      let importingDirAbs =
+        let dir =
+          if System.String.IsNullOrWhiteSpace(importingDir) then
+            UMX.untag sourcesRoot
+          elif System.IO.Path.IsPathRooted(importingDir) then
+            importingDir
+          else
+            System.IO.Path.Combine(UMX.untag sourcesRoot, importingDir)
 
-              let trailing =
-                if m.Groups.Count > groupIdx + 2 then
-                  m.Groups.[groupIdx + 2].Value
-                else
-                  ""
-              // Find the first prefix that matches
-              let prefixOpt =
-                sortedKeys
-                |> List.tryFind(fun (prefix, _) ->
-                  moduleName.StartsWith(UMX.untag prefix))
+        System.IO.Path.GetFullPath(dir)
 
-              match prefixOpt with
-              | Some(prefix, replacementPrefix) ->
-                let replacedModule =
-                  $"{replacementPrefix}{moduleName.Substring((UMX.untag prefix).Length)}"
+      let targetAbs =
+        System.IO.Path.GetFullPath(
+          System.IO.Path.Combine(UMX.untag sourcesRoot, target)
+        )
 
-                before + replacedModule + after + trailing
-              | None -> before + moduleName + after + trailing
-          ))
-        content
+      let rel =
+        System.IO.Path
+          .GetRelativePath(importingDirAbs, targetAbs)
+          .Replace('\\', '/')
 
-    replaced
+      let rel =
+        if rel.StartsWith(".") || rel.StartsWith("/") then
+          rel
+        else
+          "./" + rel
+
+      let rel = rel.TrimEnd('/')
+      let rest = rest.TrimStart('/')
+      if rest = "" then rel else rel + "/" + rest
+
+    let computeNewImport
+      (importingDir: string)
+      (moduleName: string)
+      (prefixStr: string)
+      (replacementStr: string)
+      : string =
+      let rest = moduleName.Substring(prefixStr.Length)
+
+      if
+        isRelativePath replacementStr
+        && not(System.String.IsNullOrWhiteSpace importingDir)
+      then
+        computeRelativeImport importingDir replacementStr rest
+      else
+        replacementStr + rest
+
+    let replaceMatch(m: System.Text.RegularExpressions.Match) : string =
+      let moduleName = extractModuleName m
+
+      // Ensure importingFile is absolute, fallback to sourcesRoot if not
+      let importingFileAbs =
+        if System.IO.Path.IsPathRooted(importingFile) then
+          importingFile
+        else
+          System.IO.Path.Combine(UMX.untag sourcesRoot, importingFile)
+          |> System.IO.Path.GetFullPath
+
+      let importingDir =
+        System.IO.Path.GetDirectoryName(importingFileAbs) |> nonNull
+
+      let tryReplace
+        (prefix: string<BareImport>, replacement: string<ResolutionUrl>)
+        : string option =
+        let prefixStr, replacementStr = UMX.untag prefix, UMX.untag replacement
+
+        if moduleName.StartsWith(prefixStr) then
+          let newImport =
+            computeNewImport importingDir moduleName prefixStr replacementStr
+
+          Some(m.Value.Replace(moduleName, newImport))
+        else
+          None
+
+      paths
+      |> Map.toSeq
+      |> Seq.tryPick tryReplace
+      |> Option.defaultValue m.Value
+
+    Regex.Replace(content, pattern, replaceMatch)
 
   /// Creates a PluginInfo for the perla-paths-replacer-plugin
   let createPathsReplacerPlugin
     (pathsA: Map<string<BareImport>, string<ResolutionUrl>> aval)
+    (sourcesRoot: string<SystemPath>)
     : Perla.Plugins.PluginInfo =
     let shouldTransform ext =
       [ ".js"; ".ts"; ".jsx"; ".tsx" ] |> List.contains ext
 
-    let transform: Perla.Plugins.Transform =
+    let transform: Plugins.Transform =
       fun file ->
         let paths = pathsA |> AVal.force
 
-        {
-          file with
-              content = replaceFromPaths paths file.content
-        }
+        let replaced =
+          replaceImports paths file.fileLocation sourcesRoot file.content
 
-    plugin "perla-paths-replacer-plugin" {
+        { file with content = replaced }
+
+    plugin Constants.PerlaPathsReplacerPluginName {
       should_process_file shouldTransform
       with_transform transform
     }
+
+  let getExternalsFromPaths
+    (map: Map<string<BareImport>, string<ResolutionUrl>> aval)
+    =
+
+
+    map
+    |> AVal.map(fun map -> [
+      for KeyValue(k, v) in map do
+        if
+          not(isRelativePath(UMX.untag v))
+          || System.Uri.IsWellFormedUriString(
+            UMX.untag v,
+            System.UriKind.Absolute
+          )
+        then
+          k
+    ])
+    |> AVal.force

@@ -5,7 +5,6 @@ open Xunit
 open Microsoft.Extensions.Logging
 open Perla
 open System.Runtime.InteropServices
-open System
 
 [<Fact>]
 let ``PlatformOps.Create should create a valid PlatformOps instance``() =

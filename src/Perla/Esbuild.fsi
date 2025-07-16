@@ -27,11 +27,17 @@ type EsbuildServiceArgs = {
 type EsbuildService =
 
   abstract ProcessJS:
-    entrypoint: string * outdir: string * config: EsbuildConfig ->
+    entrypoint: string<ServerUrl> *
+    sourcesPath: string<SystemPath> *
+    outdir: string<SystemPath> *
+    config: EsbuildConfig ->
       CancellableTask<unit>
 
   abstract ProcessCss:
-    entrypoint: string * outdir: string * config: EsbuildConfig ->
+    entrypoint: string<ServerUrl> *
+    sourcesPath: string<SystemPath> *
+    outdir: string<SystemPath> *
+    config: EsbuildConfig ->
       CancellableTask<unit>
 
   abstract GetPlugin: config: EsbuildConfig -> PluginInfo

@@ -70,10 +70,10 @@ type FakeJspmService
     )
 
   interface JspmService with
-    member _.Install(options, ?cancellationToken) =
-      Task.FromResult(defaultArg installResponse defaultInstallResponse)
+    member _.Install(_, _) =
+      Task.FromResult(Success(defaultArg installResponse defaultInstallResponse))
 
-    member _.Update(options, ?cancellationToken) =
+    member _.Update(options, _) =
       // Simulate adding/updating packages in the import map
       let inputMap =
         match options.TryGetValue("inputMap") with
@@ -89,7 +89,7 @@ type FakeJspmService
         updateSet
         |> Seq.fold
           (fun acc pkg ->
-            acc |> Map.add pkg ($"https://ga.jspm.io/npm:{pkg}/index.js"))
+            acc |> Map.add pkg $"https://ga.jspm.io/npm:{pkg}/index.js")
           inputMap.imports
 
       let newMap = {
@@ -102,9 +102,9 @@ type FakeJspmService
             map = newMap
       }
 
-      Task.FromResult(defaultArg updateResponse resp)
+      Task.FromResult(Success(defaultArg updateResponse resp))
 
-    member _.Uninstall(options, ?cancellationToken) =
+    member _.Uninstall(options, _) =
       // Simulate removing packages from the import map
       let inputMap =
         match options.TryGetValue("inputMap") with
@@ -129,9 +129,9 @@ type FakeJspmService
             map = newMap
       }
 
-      Task.FromResult(defaultArg uninstallResponse resp)
+      Task.FromResult(Success(defaultArg uninstallResponse resp))
 
-    member _.Download(packages, options, ?cancellationToken) =
+    member _.Download(_, _, ?cancellationToken) =
       Task.FromResult(defaultArg downloadResponse defaultDownloadResponse)
 
 module ImportMapTests =
@@ -162,7 +162,7 @@ module ImportMapTests =
       config = pkgManagerConfig
     }
 
-    PkgManager.create dependencies
+    create dependencies
 
   [<Fact>]
   let ``install should create proper request with packages``() = taskUnit {
@@ -171,12 +171,16 @@ module ImportMapTests =
     let service = createImportMapService(None)
 
     // Act
-    let! result = service.Install(packages)
+    let! resultKind = service.Install(packages)
 
     // Assert
-    Assert.Equal<int>(1, result.staticDeps.Length)
-    Assert.Equal<string>("react", result.staticDeps[0])
-    Assert.True(result.map.imports.ContainsKey("react"))
+    match resultKind with
+    | Success result ->
+      Assert.Equal<int>(1, result.staticDeps.Length)
+      Assert.Equal<string>("react", result.staticDeps[0])
+      Assert.True(result.map.imports.ContainsKey("react"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -192,12 +196,16 @@ module ImportMapTests =
     let service = createImportMapService(None)
 
     // Act
-    let! result = service.Update(importMap, packages)
+    let! resultKind = service.Update(importMap, packages)
 
     // Assert
-    Assert.Equal<int>(2, result.staticDeps.Length)
-    Assert.True(result.map.imports.ContainsKey("react"))
-    Assert.True(result.map.imports.ContainsKey("vue"))
+    match resultKind with
+    | Success result ->
+      Assert.Equal<int>(2, result.staticDeps.Length)
+      Assert.True(result.map.imports.ContainsKey("react"))
+      Assert.True(result.map.imports.ContainsKey("vue"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -217,12 +225,16 @@ module ImportMapTests =
     let service = createImportMapService(None)
 
     // Act
-    let! result = service.Uninstall(importMap, packages)
+    let! resultKind = service.Uninstall(importMap, packages)
 
     // Assert
-    Assert.Equal<int>(1, result.staticDeps.Length)
-    Assert.Equal<string>("react", result.staticDeps[0])
-    Assert.True(result.map.imports.ContainsKey("react"))
+    match resultKind with
+    | Success result ->
+      Assert.Equal<int>(1, result.staticDeps.Length)
+      Assert.Equal<string>("react", result.staticDeps[0])
+      Assert.True(result.map.imports.ContainsKey("react"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -317,19 +329,19 @@ module ImportMapTests =
     // Act & Assert - Exact matches
     let reactResult = importMap.FindDependency("react")
     Assert.True(reactResult.IsSome)
-    let (name, version) = reactResult.Value
+    let name, version = reactResult.Value
     Assert.Equal("react", name)
     Assert.Equal("18.2.0", version.Value)
 
     let reactDomResult = importMap.FindDependency("react-dom")
     Assert.True(reactDomResult.IsSome)
-    let (name2, version2) = reactDomResult.Value
+    let name2, version2 = reactDomResult.Value
     Assert.Equal("react-dom", name2)
     Assert.Equal("18.2.0", version2.Value)
 
     let babelResult = importMap.FindDependency("@babel/core")
     Assert.True(babelResult.IsSome)
-    let (name3, version3) = babelResult.Value
+    let name3, version3 = babelResult.Value
     Assert.Equal("@babel/core", name3)
     Assert.Equal("7.20.0", version3.Value)
 
@@ -371,13 +383,13 @@ module ImportMapTests =
     // Act & Assert - Case insensitive matching
     let reactResult = importMap.FindDependency("react")
     Assert.True(reactResult.IsSome)
-    let (name, version) = reactResult.Value
+    let name, version = reactResult.Value
     Assert.Equal("React", name) // Should return the original key
     Assert.Equal("18.2.0", version.Value)
 
     let lodashResult = importMap.FindDependency("lodash")
     Assert.True(lodashResult.IsSome)
-    let (name2, version2) = lodashResult.Value
+    let name2, version2 = lodashResult.Value
     Assert.Equal("LODASH", name2)
     Assert.Equal("4.17.21", version2.Value)
 
@@ -400,7 +412,7 @@ module ImportMapTests =
 
     let lodashResult = importMap.FindDependency("lodash")
     Assert.True(lodashResult.IsSome) // Should find this one with version
-    let (name, version) = lodashResult.Value
+    let name, version = lodashResult.Value
     Assert.Equal("lodash", name)
     Assert.Equal("4.17.21", version.Value)
 
@@ -411,11 +423,75 @@ module ImportMapTests =
       imports = Map.empty
       scopes = Map.empty
       integrity = Map.empty
-    }
-
-    // Act & Assert
+    }    // Act & Assert
     Assert.True(importMap.FindDependency("react").IsNone)
     Assert.True(importMap.FindDependency("").IsNone)
+
+  [<Fact>]
+  let ``FindDependencies should return multiple found dependencies``() =
+    // Arrange
+    let importMap: ImportMap = {
+      imports =
+        Map.ofList [
+          ("react", "https://ga.jspm.io/npm:react@18.2.0/index.js")
+          ("react-dom", "https://ga.jspm.io/npm:react-dom@18.2.0/index.js")
+          ("@babel/core", "https://ga.jspm.io/npm:@babel/core@7.20.0/lib/index.js")
+          ("lodash", "https://ga.jspm.io/npm:lodash@4.17.21/lodash.js")
+        ]
+      scopes = Map.empty
+      integrity = Map.empty
+    }
+
+    // Act
+    let packages = ["react"; "lodash"; "@babel/core"; "nonexistent"]
+    let result = importMap.FindDependencies(packages)
+
+    // Assert
+    Assert.Equal(3, result.Count) // Should find 3 out of 4 packages
+    Assert.Contains(("react", Some "18.2.0"), result)
+    Assert.Contains(("lodash", Some "4.17.21"), result)
+    Assert.Contains(("@babel/core", Some "7.20.0"), result)
+    Assert.DoesNotContain(("nonexistent", None), result)
+
+  [<Fact>]
+  let ``FindDependencies should return empty set for empty input``() =
+    // Arrange
+    let importMap: ImportMap = {
+      imports =
+        Map.ofList [
+          ("react", "https://ga.jspm.io/npm:react@18.2.0/index.js")
+        ]
+      scopes = Map.empty
+      integrity = Map.empty
+    }
+
+    // Act
+    let result = importMap.FindDependencies([])
+
+    // Assert
+    Assert.Equal(0, result.Count)
+
+  [<Fact>]
+  let ``FindDependencies should handle case insensitive matching``() =
+    // Arrange
+    let importMap: ImportMap = {
+      imports =
+        Map.ofList [
+          ("React", "https://ga.jspm.io/npm:react@18.2.0/index.js")
+          ("LODASH", "https://ga.jspm.io/npm:lodash@4.17.21/lodash.js")
+        ]
+      scopes = Map.empty
+      integrity = Map.empty
+    }
+
+    // Act
+    let packages = ["react"; "lodash"]
+    let result = importMap.FindDependencies(packages)
+
+    // Assert
+    Assert.Equal(2, result.Count)
+    Assert.Contains(("React", Some "18.2.0"), result) // Should preserve original case
+    Assert.Contains(("LODASH", Some "4.17.21"), result)
 
   [<Fact>]
   let ``ExtractDependencies should handle deep imports and return correct format``
@@ -458,10 +534,14 @@ module ImportMapTests =
     let packages = [ "solid-js/web" ]
     let service = createImportMapService(None)
     // Act
-    let! result = service.Uninstall(importMap, packages)
+    let! resultKind = service.Uninstall(importMap, packages)
     // Assert
-    Assert.True(result.map.imports.ContainsKey("solid-js"))
-    Assert.False(result.map.imports.ContainsKey("solid-js/web"))
+    match resultKind with
+    | Success result ->
+      Assert.True(result.map.imports.ContainsKey("solid-js"))
+      Assert.False(result.map.imports.ContainsKey("solid-js/web"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -481,10 +561,14 @@ module ImportMapTests =
     let packages = [ "solid-js/web" ]
     let service = createImportMapService(None)
     // Act
-    let! result = service.Update(importMap, packages)
+    let! resultKind = service.Update(importMap, packages)
     // Assert
-    Assert.True(result.map.imports.ContainsKey("solid-js"))
-    Assert.True(result.map.imports.ContainsKey("solid-js/web"))
+    match resultKind with
+    | Success result ->
+      Assert.True(result.map.imports.ContainsKey("solid-js"))
+      Assert.True(result.map.imports.ContainsKey("solid-js/web"))
+    | ResponseError err ->
+      Assert.Fail($"Expected Success but got Error: {err.error}")
   }
 
   [<Fact>]
@@ -525,6 +609,6 @@ module ImportMapTests =
     let result = importMap.FindDependency("solid-js/web")
     // Assert
     Assert.True(result.IsSome)
-    let (name, version) = result.Value
+    let name, version = result.Value
     Assert.Equal("solid-js/web", name)
     Assert.Equal("1.9.7", version.Value)

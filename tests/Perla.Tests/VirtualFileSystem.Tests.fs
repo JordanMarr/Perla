@@ -2,17 +2,13 @@ module Perla.Tests.VirtualFileSystem
 
 open System
 open System.IO
-open System.Reactive.Subjects
 open Microsoft.Extensions.Logging
 open Xunit
 open FSharp.UMX
-open FSharp.Control
-open IcedTasks
 
 open Perla.Units
 open Perla.VirtualFs
 open Perla.Extensibility
-open Perla.Plugins
 open Perla.Logger
 
 // Test helpers and fakes
@@ -44,8 +40,8 @@ module TestHelpers =
 type FakeExtensibilityService() =
   interface ExtensibilityService with
     member _.GetAllPlugins() = []
-    member _.GetRunnablePlugins(_) = []
-    member _.HasPluginsForExtension(_) = false
+    member _.GetRunnablePlugins _ = []
+    member _.HasPluginsForExtension _ = false
     member _.LoadPlugins(_, _) = Ok []
     member _.RunPlugins _ file = async { return file }
 

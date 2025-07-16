@@ -145,7 +145,7 @@ module Observable =
 
             member _.DisposeAsync() =
               lock lockObj (fun () ->
-                subscription |> Option.iter(fun s -> s.Dispose())
+                subscription |> Option.iter(_.Dispose())
                 subscription <- None
                 signal <- None)
 
@@ -352,15 +352,15 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
     | "application/json", JS -> {
         ContentType = "application/javascript"
         Content =
-          processJsonAsJs(System.Text.Encoding.UTF8.GetString content)
-          |> System.Text.Encoding.UTF8.GetBytes
+          processJsonAsJs(Encoding.UTF8.GetString content)
+          |> Encoding.UTF8.GetBytes
         ShouldProcess = true
       }
     | "text/css", JS -> {
         ContentType = "application/javascript"
         Content =
-          processCssAsJs (System.Text.Encoding.UTF8.GetString content) reqPath
-          |> System.Text.Encoding.UTF8.GetBytes
+          processCssAsJs (Encoding.UTF8.GetString content) reqPath
+          |> Encoding.UTF8.GetBytes
         ShouldProcess = true
       }
     | _, Normal -> {
@@ -407,7 +407,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
         match file with
         | TextFile fileContent ->
           let mimeType = fileContent.mimetype
-          let content = System.Text.Encoding.UTF8.GetBytes fileContent.content
+          let content = Encoding.UTF8.GetBytes fileContent.content
 
           // Process the file based on request type
           let processingResult =
@@ -419,7 +419,7 @@ document.head.appendChild(style).innerHTML=String.raw`{content}`;"""
 
           return!
             (setMimeType processingResult.ContentType
-             >=> Successful.ok processingResult.Content)
+             >=> ok processingResult.Content)
               ctx
         | BinaryFile binaryInfo ->
           return!
@@ -490,6 +490,7 @@ module LiveReload =
       createHmrEventData event {
         content = file.content
         extension = ".css"
+        fileLocation = UMX.untag file.source
       }
 
     let id = string(DateTimeOffset.Now.ToUnixTimeSeconds())
@@ -519,7 +520,7 @@ module LiveReload =
       // Handle file change events
       for event in fileChangedEvents do
         let msg = createLiveReloadMessage vfs event
-        do! EventSource.send out msg :> Task
+        do! send out msg :> Task
     }
 
   let sseHandler
@@ -545,7 +546,7 @@ module LiveReload =
 
 module SpaFallback =
 
-  let spaFallback(configA: PerlaConfig aval) : WebPart =
+  let spaFallback(_: PerlaConfig aval) : WebPart =
     fun ctx -> async {
       let path = ctx.request.url.AbsolutePath
 
@@ -633,7 +634,7 @@ module PerlaHandlers =
 
       // remove standalone entry points, we don't need them in the browser
       doc.QuerySelectorAll "[data-entry-point=standalone][type=module]"
-      |> Seq.iter(fun f -> f.Remove())
+      |> Seq.iter(_.Remove())
 
       if config.devServer.liveReload then
         let liveReload = doc.CreateElement "script"
@@ -658,13 +659,13 @@ module PerlaHandlers =
 
       // remove any existing entry points, we don't need them in the tests
       doc.QuerySelectorAll("[data-entry-point][type=module]")
-      |> Seq.iter(fun f -> f.Remove())
+      |> Seq.iter(_.Remove())
 
       doc.QuerySelectorAll("[data-entry-point][rel=stylesheet]")
-      |> Seq.iter(fun f -> f.Remove())
+      |> Seq.iter(_.Remove())
 
       doc.QuerySelectorAll("[data-entry-point=standalone][type=module]")
-      |> Seq.iter(fun f -> f.Remove())
+      |> Seq.iter(_.Remove())
 
       let body = Build.EnsureBody doc
       let head = Build.EnsureHead doc
@@ -733,7 +734,7 @@ module PerlaHandlers =
         return!
           (setMimeType "application/json"
            >=> OK(Json.ToText({| message = message |}))
-           >=> Writers.setStatus HTTP_404)
+           >=> setStatus HTTP_404)
             ctx
       else
         let content =
@@ -877,18 +878,16 @@ module SuaveServer =
             regex.Replace(
               template,
               fun (m: System.Text.RegularExpressions.Match) ->
-                let key = m.Groups.[1].Value
+                let key = m.Groups[1].Value
 
                 let fmt =
-                  if m.Groups.Count > 2 && m.Groups.[2].Success then
-                    m.Groups.[2].Value
+                  if m.Groups.Count > 2 && m.Groups[2].Success then
+                    m.Groups[2].Value
                   else
                     ""
 
                 match fields.TryFind key with
-                | Some(:? IFormattable as f) when
-                  not(System.String.IsNullOrEmpty(fmt))
-                  ->
+                | Some(:? IFormattable as f) when not(String.IsNullOrEmpty(fmt)) ->
                   f.ToString(
                     fmt,
                     System.Globalization.CultureInfo.InvariantCulture
@@ -930,11 +929,11 @@ module SuaveServer =
               regex.Replace(
                 template,
                 fun (m: RegularExpressions.Match) ->
-                  let key = m.Groups.[1].Value
+                  let key = m.Groups[1].Value
 
                   let fmt =
-                    if m.Groups.Count > 2 && m.Groups.[2].Success then
-                      m.Groups.[2].Value
+                    if m.Groups.Count > 2 && m.Groups[2].Success then
+                      m.Groups[2].Value
                     else
                       ""
 

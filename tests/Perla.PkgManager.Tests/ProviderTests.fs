@@ -3,7 +3,6 @@ module Perla.PkgManager.Tests.ProviderTests
 open System
 open Xunit
 open Microsoft.Extensions.Logging
-open Serilog
 
 open Perla.Logger
 open Perla.PkgManager

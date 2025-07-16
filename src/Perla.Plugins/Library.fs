@@ -11,6 +11,8 @@ type FileTransform = {
   /// It also serves for plugin authors to determine
   /// if their plugin should act on this particular file
   extension: string
+  /// Full path to the source file
+  fileLocation: string
 }
 
 ///<summary>

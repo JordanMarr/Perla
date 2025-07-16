@@ -3,17 +3,14 @@ namespace Perla.Handlers
 open System
 open System.IO
 
-open System.Threading
-open System.Threading.Tasks
 open Microsoft.Extensions.Logging
-open Microsoft.Playwright
 
 open AngleSharp
 open AngleSharp.Html.Parser
+open Perla.Esbuild
 open Spectre.Console
 
 open FSharp.Control
-open FSharp.Control.Reactive
 open FSharp.Data.Adaptive
 
 open IcedTasks
@@ -53,16 +50,11 @@ type SetupOptions = {
 
 type ListTemplatesOptions = { format: ListFormat }
 
-type AddPackageOptions = {
-  package: string
-  version: string option
-}
-
-type RemovePackageOptions = { package: string }
+type DependencyOptions = { packages: string Set }
 
 type InstallOptions = {
-  offline: bool
-  source: Perla.PkgManager.DownloadProvider voption
+  offline: bool option
+  source: PkgManager.DownloadProvider voption
 }
 
 type ListPackagesOptions = { format: ListFormat }
@@ -165,7 +157,7 @@ module RunNew =
   let writeFoundDecodedTemplate
     (FsManager fsManager & Directories directories)
     (
-      config: DecodedTemplateConfiguration,
+      _: DecodedTemplateConfiguration,
       tpl: DecodedTemplateConfigItem,
       targetPath: string<SystemPath>
     ) =
@@ -339,15 +331,13 @@ module Handlers =
       let (Logger logger) = container
       let (TemplateService templateService) = container
 
-      let template = voption {
-        let! username, repository, _ =
-          parseFullRepositoryName options.fullRepositoryName
-
-        return!
-          TemplateSearchKind.FullName(username, repository)
+      let template =
+        match options.fullRepositoryName with
+        | FullRepositoryName(user, repo, branch) ->
+          TemplateSearchKind.FullName(user, repo)
           |> templateService.FindOne
           |> ValueOption.ofOption
-      }
+        | _ -> ValueNone
 
       let updateRepo() = cancellableTask {
         match template with
@@ -375,7 +365,7 @@ module Handlers =
 
       match options.operation with
       | RunTemplateOperation.List listFormat ->
-        // Simply list the templates using the service and return
+        // List the templates using the service and return
         let templates = templateService.ListTemplateItems()
 
         match listFormat with
@@ -407,18 +397,17 @@ module Handlers =
         return 0
 
       | RunTemplateOperation.Add ->
-        match parseFullRepositoryName options.fullRepositoryName with
-        | ValueSome(username, repository, branch) ->
+        match options.fullRepositoryName with
+        | FullRepositoryName(user, repo, branch) ->
           try
-            let! id =
-              templateService.Add(username, UMX.tag repository, UMX.tag branch)
+            let! id = templateService.Add(user, UMX.tag repo, UMX.tag branch)
 
             logger.LogInformation $"Template added successfully with id: {id}"
             return 0
           with ex ->
             logger.LogError(ex, "Failed to add template: {Error}", ex.Message)
             return 1
-        | ValueNone ->
+        | _ ->
           logger.LogWarning "We were unable to parse the repository name."
 
           logger.LogInformation(
@@ -457,128 +446,118 @@ module Handlers =
           return 1
     }
 
+  // Helper to adaptively add /node_modules mount if needed
+  let withNodeModules(config: PerlaConfig aval) =
+    config
+    |> AVal.map(fun config ->
+      let hasKey =
+        config.mountDirectories
+        |> Map.containsKey(UMX.tag<ServerUrl> "/node_modules")
+
+      if config.useLocalPkgs && not hasKey then
+        {
+          config with
+              mountDirectories =
+                config.mountDirectories
+                |> Map.add
+                  (UMX.tag<ServerUrl> "/node_modules")
+                  (UMX.tag<UserPath> "./node_modules")
+        }
+      else
+        config)
+
   let runBuild (container: AppContainer) (options: BuildOptions) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
 
-    let config = container.Configuration.PerlaConfig |> AVal.force
+    let config = container.Configuration.PerlaConfig |> withNodeModules
 
-    match config.fable with
-    | None ->
-      container.Logger.LogWarning(
-        "Fable configuration not found. Skipping Fable build."
-      )
-    | Some config ->
-      container.Logger.LogInformation(
-        "Fable configuration found. Running Fable build."
-      )
+    let buildOutDir = config |> AVal.map _.build.outDir |> AVal.force
 
-      do! container.FableService.Run config
+    // Step 1: Fable build (if configured)
+    do! container.BuildService.RunFable(config)
 
-    let outDir = DirectoryInfo(UMX.untag config.build.outDir)
+    // Step 2: Clean output directory
+    container.BuildService.CleanOutput(config)
 
-    try
-      outDir.Delete(true)
-    with ex ->
-      container.Logger.LogWarning(
-        "Failed to clean output directory {path}: {error}",
-        outDir.FullName,
-        ex.Message
-      )
+    // Step 3: Prepare VFS output directory
+    let vfsOutputDir =
+      ".tmp/perla/vfs" |> Path.GetFullPath |> UMX.tag<SystemPath>
 
-    let plugins = container.FsManager.ResolvePluginPaths()
+    Directory.CreateDirectory(UMX.untag vfsOutputDir) |> ignore
 
-    let defaultPlugins = seq {
-      if not(Map.isEmpty config.paths) then
-        ImportMaps.createPathsReplacerPlugin(
-          container.Configuration.PerlaConfig |> AVal.map _.paths
-        )
+    // Step 4: Load plugins
+    container.BuildService.LoadPlugins(config, vfsOutputDir)
 
-      if
-        config.plugins
-        |> List.exists(fun p ->
-          p.Equals(
-            Constants.PerlaEsbuildPluginName,
-            StringComparison.InvariantCultureIgnoreCase
-          ))
-      then
-        container.EsbuildService.GetPlugin config.esbuild
-    }
+    // Step 5: Load virtual file system
+    do! container.BuildService.LoadVfs(config)
 
-    container.ExtensibilityService.LoadPlugins(plugins, defaultPlugins)
-    |> Result.teeError(fun err ->
-      container.Logger.LogError("Failed to load plugins: {error}", err))
-    |> Result.ignore
-    |> Result.ignoreError
-
-    do!
-      container.Logger.Spinner(
-        "Mounting Virtual File System",
-        container.VirtualFileSystem.Load config.mountDirectories
-      )
-
-    let! tempDir = container.VirtualFileSystem.ToDisk()
-
+    // Step 6: Copy VFS to disk
+    let! tempDir = container.BuildService.CopyVfsToDisk vfsOutputDir
 
     container.Logger.LogInformation(
       "Copying Processed files to {tempDirectory}",
       tempDir
     )
 
-    if config.build.emitEnvFile then
-      container.Logger.LogInformation("Writing Env File")
+    // Step 7: Emit env file if needed
+    container.BuildService.EmitEnvFile(config, buildOutDir)
 
-      container.FsManager.EmitEnvFile(config, tempDir)
-
+    // Step 8: Prepare index and import map
     use browserCtx = new BrowsingContext()
-
     let index = container.FsManager.ResolveIndex |> AVal.force
 
     let document =
       (browserCtx.GetService<IHtmlParser>() |> nonNull).ParseDocument index
 
-
-    // at this point all of the files in the tempDir should have gone through esbuild if it was enabled
-    // but as individual files, not as a bundle
-    let cssPaths, jsPaths, standalonePaths = Build.EntryPoints document
-
-    let jsPaths = seq {
-      yield! jsPaths
-      yield! standalonePaths
-    }
-
     let map =
       container.FsManager.ResolveImportMap
-      |> ImportMaps.withPathsA container.Configuration.PerlaConfig
+      |> ImportMaps.withPathsA config
+      |> AVal.map2 ImportMaps.cleanupLocalPaths (config |> AVal.map _.paths)
       |> AVal.force
 
-    let indexContent = Build.Index(document, map, jsPaths, cssPaths)
+    let externals = ImportMaps.getExternalsFromPaths(config |> AVal.map _.paths)
 
-    do!
-      File.WriteAllTextAsync(
-        Path.Combine(UMX.untag tempDir, "index.html"),
-        indexContent,
-        token
+    let cssPaths, jsBundleEntrypoints, jsStandalonePaths =
+      Build.EntryPoints document
+
+    // Step 9: Run esbuild or move/copy output
+    let! esbuildOutput =
+      container.BuildService.RunEsbuild(
+        config,
+        tempDir,
+        cssPaths,
+        jsBundleEntrypoints,
+        externals |> Seq.map UMX.untag |> Seq.toList
       )
 
-    // Move the temporary directory to the output directory as that's the source of truth for our build
+    container.BuildService.MoveOrCopyOutput(config, tempDir, esbuildOutput)
+
+    // Step 10: Write index.html
+    let jsPaths = seq {
+      yield! jsStandalonePaths
+      yield! jsBundleEntrypoints
+    }
+
+    do!
+      container.BuildService.WriteIndex(
+        config,
+        document,
+        map,
+        jsPaths,
+        cssPaths
+      )
+
+    // // cleanup temporary directory
     try
-      Directory.Move(UMX.untag tempDir, outDir.FullName)
+      Directory.Delete(UMX.untag ".tmp/perla", true) |> ignore
     with ex ->
       container.Logger.LogWarning(
-        "Failed to move temporary directory {tempDir} to output directory {outDir}: {error}",
-        tempDir,
-        config.build.outDir,
+        "Failed to delete temporary directory {dir}: {error}",
+        UMX.untag ".tmp/perla",
         ex.Message
       )
 
-    // At this point the outdir should be available, we can safely copy things out.
-    container.FsManager.CopyGlobs config.build
-
-    // TODO: evauate the bundle and minification usage here
-    // at this point our original index file is still pointing to the entrypoints
-    // so we could run esbuild to bundle and minify the sources
-    // however, this might cause issues with the "paths" and other custom resolutions
-
+    // Step 11: Start preview server if requested
     if options.enablePreview then
       container.Logger.LogInformation "Starting a preview server for the build"
 
@@ -586,7 +565,7 @@ module Handlers =
         {
           Logger = container.Logger
           VirtualFileSystem = container.VirtualFileSystem
-          Config = container.Configuration.PerlaConfig
+          Config = config
           FsManager = container.FsManager
           FileChangedEvents = container.VirtualFileSystem.FileChanges
         }
@@ -608,8 +587,9 @@ module Handlers =
                   host = defaultArg options.host config.devServer.host
                   useSSL = defaultArg options.ssl config.devServer.useSSL
             }
-            esbuild = { config.esbuild with minify = false }
+            esbuild.minify = false
       })
+      |> withNodeModules
 
     let config = configA |> AVal.force
     let fableConfig = config.fable
@@ -659,9 +639,6 @@ module Handlers =
       let plugins = container.FsManager.ResolvePluginPaths()
 
       let defaultPlugins = seq {
-        if not(Map.isEmpty config.paths) then
-          ImportMaps.createPathsReplacerPlugin(configA |> AVal.map _.paths)
-
         if
           config.plugins
           |> List.exists(fun p ->
@@ -700,7 +677,7 @@ module Handlers =
       return 0
   }
 
-  let runTesting (container: AppContainer) (options: TestingOptions) = cancellableTask {
+  let runTesting (_: AppContainer) (_: TestingOptions) = cancellableTask {
     // let! cancellationToken = CancellableTask.getCancellationToken()
 
     // ConfigurationManager.UpdateFromCliArgs(
@@ -881,7 +858,7 @@ module Handlers =
     return 0
   }
 
-  let runAddPackage (container: AppContainer) (options: AddPackageOptions) = cancellableTask {
+  let runAddPackage (container: AppContainer) (options: DependencyOptions) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
     let pkgManager = container.PkgManager
     let logger = container.Logger
@@ -889,36 +866,52 @@ module Handlers =
     let config = container.Configuration.PerlaConfig |> AVal.force
     let importMap = container.FsManager.ResolveImportMap |> AVal.force
 
-    let basePkg, fullImport, version = options.package |> parsePackageName
-    let version = version |> Option.orElseWith(fun _ -> options.version)
+    // Process each package in the set
+    let packageInfos =
+      options.packages
+      |> Set.map(fun pkg ->
+        match (pkg, None) with
+        | PkgWithVersion(basePkg, fullImport, version) ->
+          basePkg, fullImport, version
+        | _ ->
+          logger.LogError("Invalid package name: {pkg}", pkg)
+          failwith $"Invalid package name: {pkg}")
 
-    let packages =
+    // Start with existing packages
+    let initialPackages =
       if config.useLocalPkgs then
         config.dependencies
-        |> Set.map(fun ({ package = package; version = version }) ->
+        |> Set.map(fun { package = package; version = version } ->
           package, Some(UMX.untag version))
       else
         // Otherwise, we start with an empty set of packages
         importMap.ExtractDependencies()
 
-    // Remove any existing entries for this full import or base package
+    // Process each package to add
     let packages =
-      packages
-      |> Set.filter(fun (name, _) -> name <> fullImport && name <> basePkg)
-      // Add both the base package and the full import (if different)
-      |> fun pkgs ->
-          let pkgs = pkgs |> Set.add(basePkg, version)
+      packageInfos
+      |> Set.fold
+        (fun pkgs (basePkg, fullImport, version) ->
+          // Remove any existing entries for this full import or base package
+          pkgs
+          |> Set.filter(fun (name, _) -> name <> fullImport && name <> basePkg)
+          // Add both the base package and the full import (if different)
+          |> fun filteredPkgs ->
+              let updatedPkgs = filteredPkgs |> Set.add(basePkg, version)
 
-          if fullImport <> basePkg then
-            Set.add (fullImport, version) pkgs
-          else
-            pkgs
+              if fullImport <> basePkg then
+                Set.add (fullImport, version) updatedPkgs
+              else
+                updatedPkgs)
+        initialPackages
 
-    logger.LogInformation(
-      "Adding package '{name}' with version '{version}'",
-      fullImport,
-      version
-    )
+    // Log the packages being added
+    for basePkg, fullImport, version in packageInfos do
+      logger.LogInformation(
+        "Adding package '{name}' with version '{version}'",
+        fullImport,
+        version
+      )
 
     let provider =
       match config.provider with
@@ -930,13 +923,11 @@ module Handlers =
     let installSet =
       packages
       |> Set.map(fun (name, version) ->
-        let basePkg, full, _ = parsePackageName name
-
-        match version with
-        | Some v when full <> basePkg ->
-          $"{basePkg}@{v}/{full.Substring(basePkg.Length + 1)}"
-        | Some v -> $"{basePkg}@{v}"
-        | None -> full)
+        match name, version with
+        | InstallString s -> s
+        | _ ->
+          logger.LogError("Invalid package name: {name}", name)
+          failwith $"Invalid package name: {name}")
 
     let! installResponse =
       logger.Spinner(
@@ -947,6 +938,12 @@ module Handlers =
           cancellationToken = token
         )
       )
+
+    match installResponse with
+    | GeneratorResponseKind.ResponseError err ->
+      logger.LogError("Unable to install packages: {error}", err.error)
+      return 1
+    | GeneratorResponseKind.Success installResponse ->
 
     let packageUpdates =
       // extract the dependencies before we save the offline map
@@ -981,87 +978,98 @@ module Handlers =
 
     do! container.FsManager.SavePerlaConfig configUpdates
 
-    logger.LogInformation(
-      "Package '{name}' installed successfully.",
-      fullImport
-    )
+    logger.LogInformation("Packages added successfully.")
 
     return 0
   }
 
-  let runRemovePackage
-    (container: AppContainer)
-    (options: RemovePackageOptions)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let config = container.Configuration.PerlaConfig |> AVal.force
-      let logger = container.Logger
-      let map = container.FsManager.ResolveImportMap |> AVal.force
+  let runRemovePackage (container: AppContainer) (options: DependencyOptions) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let config = container.Configuration.PerlaConfig |> AVal.force
+    let logger = container.Logger
+    let map = container.FsManager.ResolveImportMap |> AVal.force
 
-      match map.FindDependency options.package with
-      | None ->
-        logger.LogError(
-          "Package '{name}' not found in the import map.",
-          options.package
+    // Find all packages that exist in the import map
+    let packagesToRemove =
+      options.packages
+      |> Seq.choose(fun pkg ->
+        match map.FindDependency pkg with
+        | None ->
+          logger.LogWarning(
+            "Package '{name}' not found in the import map.",
+            pkg
+          )
+
+          None
+        | Some(name, _) -> Some name)
+      |> Seq.toList
+
+    if List.isEmpty packagesToRemove then
+      logger.LogError("No valid packages found to remove.")
+      return 1
+    else
+      let packageNames = String.concat ", " packagesToRemove
+
+      let! uninstallResponse =
+        logger.Spinner(
+          $"Uninstalling packages: {packageNames}...",
+          container.PkgManager.Uninstall(
+            map,
+            packagesToRemove,
+            [
+              DefaultProvider(
+                match config.provider with
+                | JsDelivr -> Provider.JsDelivr
+                | Unpkg -> Provider.Unpkg
+                | JspmIo -> Provider.JspmIo
+              )
+            ],
+            token
+          )
         )
 
+      match uninstallResponse with
+      | GeneratorResponseKind.ResponseError err ->
+        logger.LogError("Unable to install packages: {error}", err.error)
         return 1
-      | Some(name, _) ->
-        let! uninstallResponse =
+      | GeneratorResponseKind.Success uninstallResponse ->
+
+      let packageUpdates =
+        // extract the dependencies before we save the offline map
+        uninstallResponse.map.ExtractDependencies()
+        |> Set.map(fun (name, version) ->
+          let dep: PkgDependency = {
+            package = name
+            // dependencies from a GeneratorResponse have embedded versions even if they are not specified
+            version = version.Value |> UMX.tag<Semver>
+          }
+
+          dep)
+        |> PerlaConfig.PerlaWritableField.Dependencies
+
+      let configUpdates = ResizeArray()
+      configUpdates.Add packageUpdates
+
+      if config.useLocalPkgs then
+        let! result =
           logger.Spinner(
-            $"Uninstalling package '{name}'...",
-            container.PkgManager.Uninstall(
-              map,
-              [ name ],
-              [
-                DefaultProvider(
-                  match config.provider with
-                  | JsDelivr -> Provider.JsDelivr
-                  | Unpkg -> Provider.Unpkg
-                  | JspmIo -> Provider.JspmIo
-                )
-              ],
+            "Consolidating local packages...",
+            container.PkgManager.GoOffline(
+              uninstallResponse.map,
+              [ Provider config.provider ],
               token
             )
           )
 
-        let packageUpdates =
-          // extract the dependencies before we save the offline map
-          uninstallResponse.map.ExtractDependencies()
-          |> Set.map(fun (name, version) ->
-            let dep: PkgDependency = {
-              package = name
-              // dependencies from a GeneratorResponse have embedded versions even if they are not specified
-              version = version.Value |> UMX.tag<Semver>
-            }
+        do! container.FsManager.SaveImportMap result
+      else
+        do! container.FsManager.SaveImportMap uninstallResponse.map
 
-            dep)
-          |> PerlaConfig.PerlaWritableField.Dependencies
+      do! container.FsManager.SavePerlaConfig configUpdates
+      logger.LogInformation("Packages installed successfully.")
+      return 0
 
-        let configUpdates = ResizeArray()
-        configUpdates.Add packageUpdates
-
-        if config.useLocalPkgs then
-          let! result =
-            logger.Spinner(
-              "Consolidating local packages...",
-              container.PkgManager.GoOffline(
-                uninstallResponse.map,
-                [ Provider config.provider ],
-                token
-              )
-            )
-
-          do! container.FsManager.SaveImportMap result
-        else
-          do! container.FsManager.SaveImportMap uninstallResponse.map
-
-        do! container.FsManager.SavePerlaConfig configUpdates
-        logger.LogInformation("Packages installed successfully.")
-        return 0
-
-    }
+  }
 
   let runInstall (container: AppContainer) (options: InstallOptions) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
@@ -1078,16 +1086,19 @@ module Handlers =
         "You can add dependencies with 'perla add <package>'."
       )
 
-      let useLocalPkgs = config |> AVal.map _.useLocalPkgs |> AVal.force
+      let configUseLocalPkgs = config |> AVal.map _.useLocalPkgs |> AVal.force
       let provider = config |> AVal.map _.provider |> AVal.force
 
       let changes = ResizeArray()
 
-      if options.offline <> useLocalPkgs then
-        let msg = if options.offline then "Enabling" else "Disabling"
+      let useLocalPkgs =
+        options.offline |> Option.defaultValue configUseLocalPkgs
+
+      if useLocalPkgs <> configUseLocalPkgs then
+        let msg = if useLocalPkgs then "Enabling" else "Disabling"
         logger.LogInformation($"{msg} local packages.")
 
-        if options.offline then
+        if useLocalPkgs then
           logger.LogInformation(
             "Perla will generate a local node_modules directory and the import map will point at the dependencies there."
           )
@@ -1096,7 +1107,7 @@ module Handlers =
             "Perla will use an import map that points to the provider's CDN."
           )
 
-        changes.Add(PerlaConfig.PerlaWritableField.UseLocalPkgs options.offline)
+        changes.Add(PerlaConfig.PerlaWritableField.UseLocalPkgs useLocalPkgs)
 
       if options.source.IsSome && options.source.Value <> provider then
         logger.LogInformation(
@@ -1110,15 +1121,32 @@ module Handlers =
       do! container.FsManager.SavePerlaConfig(changes)
       return 0
     else
-
       let packages =
-        dependencies
-        |> Set.map(fun dep -> $"{dep.package}@{UMX.untag dep.version}")
+        config
+        |> AVal.map _.dependencies
+        |> AVal.force
+        |> Set.map(fun ({ package = package; version = version }) ->
+          match package, Some version with
+          | InstallString s -> s
+          | _ ->
+            logger.LogError("Invalid package name: {package}", package)
+            failwith $"Invalid package name: {package}")
+
+      logger.LogDebug("Found Dependencies: {dependencies}", packages)
 
       let provider =
         match options.source with
         | ValueSome source -> source
         | ValueNone -> config |> AVal.map _.provider |> AVal.force
+
+      let configUseLocalPkgs =
+        container.Configuration.PerlaConfig
+        |> AVal.map _.useLocalPkgs
+        |> AVal.force
+
+      let useLocalPkgs =
+        options.offline |> Option.defaultValue configUseLocalPkgs
+
 
       let! map =
         logger.Spinner(
@@ -1136,9 +1164,17 @@ module Handlers =
           )
         )
 
+      logger.LogDebug("Response: {response}", map)
+
+      match map with
+      | GeneratorResponseKind.ResponseError err ->
+        logger.LogError("Unable to install packages: {error}", err.error)
+        return 1
+      | GeneratorResponseKind.Success updateResponse ->
+
       let packageUpdates =
         // extract the dependencies before we save the offline map
-        map.map.ExtractDependencies()
+        updateResponse.map.ExtractDependencies()
         |> Set.map(fun (name, version) ->
           let dep: PkgDependency = {
             package = name
@@ -1150,7 +1186,7 @@ module Handlers =
         |> PerlaConfig.PerlaWritableField.Dependencies
 
       let! map = cancellableTask {
-        if options.offline then
+        if useLocalPkgs then
           logger.LogWarning(
             "Offline mode selected, we'll proceed to download the dependencies as local sources."
           )
@@ -1159,19 +1195,21 @@ module Handlers =
             logger.Spinner(
               "Downloading Sources...",
               pkgManager.GoOffline(
-                map.map,
+                updateResponse.map,
                 [ DownloadOption.Provider provider ],
                 token
               )
             )
         else
           logger.LogInformation("Import map generated successfully.")
-          return map.map
+          return updateResponse.map
       }
 
       let configUpdates = [
         packageUpdates
-        PerlaConfig.PerlaWritableField.UseLocalPkgs options.offline
+        if useLocalPkgs <> configUseLocalPkgs then
+          PerlaConfig.PerlaWritableField.UseLocalPkgs useLocalPkgs
+
         match options.source with
         | ValueSome source -> PerlaConfig.PerlaWritableField.Provider source
         | ValueNone -> ()

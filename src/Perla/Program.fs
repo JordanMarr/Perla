@@ -8,27 +8,38 @@ open Perla.FileSystem
 open Perla.Commands
 open Perla.Logger
 
+
 module Env =
 
   let SetupAppContainer() =
     let lf =
-      LoggerFactory.Create(fun builder ->
-        builder
-          .AddPerlaLogger()
 #if DEBUG
-          .SetMinimumLevel(LogLevel.Debug)
+      let loglevel = LogLevel.Debug
 #else
-          .SetMinimumLevel(LogLevel.Information)
+
+#if TRACE
+      let loglevel = LogLevel.Trace
+#else
+      let loglevel = LogLevel.Information
 #endif
+
+#endif
+      LoggerFactory.Create(fun builder ->
+        builder.AddPerlaLogger(logLevel = loglevel).SetMinimumLevel(loglevel)
         |> ignore)
 
     let AppLogger = lf.CreateLogger("Perla")
 
     let directories = PerlaDirectories.Create()
 
+    try
+      System.IO.DirectoryInfo($"{directories.PerlaArtifactsRoot}").Create()
+    with _ ->
+      ()
+
     directories.SetCwdToProject()
 
-    let platform = PlatformOps.Create(AppLogger)
+    let platform = PlatformOps.Create AppLogger
 
     let requestHandler =
       RequestHandler.Create {
@@ -44,6 +55,8 @@ module Env =
         PerlaDirectories = directories
         RequestHandler = requestHandler
       }
+    // add it to the path
+    pfsm.ResolveEsbuildPath() |> ignore
 
     AppContainer.Create {
       Logger = AppLogger
