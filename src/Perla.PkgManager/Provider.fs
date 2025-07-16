@@ -192,22 +192,12 @@ module ProviderOps =
         None
 
   /// Extract package name with version for flat directory structure
-  /// For scoped packages, keeps the full string; for regular packages, removes version
+  /// For both scoped and regular packages, removes version
   /// This is used specifically for creating flat directory structures in node_modules
   let extractPackageNameForFlatStructure(package: string) : string =
-    if package.StartsWith("@") then
-      // Scoped package: @scope/package@version -> @scope/package@version (keep full)
-      let parts = package.Split('@')
-
-      if parts.Length > 2 then
-        "@" + parts[1] + "@" + parts[2]
-      else
-        package
-    else
-      // Regular package: package@version -> package (remove version)
-      match extractPkgAndVersion package with
-      | Some(packageName, _) -> packageName
-      | None -> package // fallback to original string if parsing fails
+    match extractPkgAndVersion package with
+    | Some(packageName, _) -> packageName
+    | None -> package // fallback to original string if parsing fails
 
   let extractPackageNameFromKeys (packageName: string) (map: Map<string, _>) =
     // Find the first key that matches the package name
