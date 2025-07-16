@@ -834,11 +834,18 @@ module VirtualFs =
 
             Directory.CreateDirectory targetDir |> ignore
 
-            args.Logger.LogDebug(
-              "Copying Server entry {File} to {TargetPath}",
-              serverUrl,
-              targetPath
-            )
+            if serverUrl.Contains("node_modules") then
+              args.Logger.LogTrace(
+                "Copying node_modules entry {File} to {TargetPath}",
+                serverUrl,
+                targetPath
+              )
+            else
+              args.Logger.LogDebug(
+                "Copying Server entry {File} to {TargetPath}",
+                serverUrl,
+                targetPath
+              )
 
             match entry.kind with
             | TextFile content ->
